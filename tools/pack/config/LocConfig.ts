@@ -1,7 +1,7 @@
 import ParamType from '#/cache/config/ParamType.js';
 import ScriptVarType from '#/cache/config/ScriptVarType.js';
 import ColorConversion from '#/util/ColorConversion.js';
-import { CategoryPack, LocPack, ModelPack, SeqPack, TexturePack } from '#tools/pack/PackFile.js';
+import { CategoryPack, LocPack, ModelPack, SeqPack, TexturePack, VarbitPack } from '#tools/pack/PackFile.js';
 import { LocModelShape, ConfigValue, ConfigLine, ParamValue, PackedData, isConfigBoolean, getConfigBoolean, packStepError } from '#tools/pack/config/PackShared.js';
 import { lookupParamValue } from '#tools/pack/config/ParamConfig.js';
 
@@ -39,6 +39,7 @@ export function parseLocConfig(key: string, value: string): ConfigValue | null |
         'op1', 'op2', 'op3', 'op4', 'op5',
         // defer parsing to packing stage:
         'model', 'model2', 'model3', 'model4', 'model5',
+        'multivarbit', 'multiloc',
     ];
     // prettier-ignore
     const numberKeys = [
@@ -185,6 +186,8 @@ export function packLocConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
             let active: number = -1; // not written last, but affects name output
             let desc: string | null = null;
             const params: ParamValue[] = [];
+            let multivarbit = -1;
+            const multiloc: number[] = [];
 
             for (let j = 0; j < config.length; j++) {
                 const { key, value } = config[j];
@@ -311,6 +314,21 @@ export function packLocConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
                 } else if (key === 'raiseobject') {
                     client.p1(75);
                     client.pbool(value as boolean);
+                } else if (key === 'multivarbit') {
+                    const varbit = VarbitPack.getByName(value as string);
+                    if (varbit === -1) {
+                        throw packStepError(debugname, `Unknown multivarbit: ${value}`);
+                    }
+
+                    multivarbit = varbit;
+                } else if (key === 'multiloc') {
+                    const [index, loc] = (value as string).split(',');
+                    const locId = LocPack.getByName(loc);
+                    if (locId === -1) {
+                        throw packStepError(debugname, `Unknown multiloc: ${loc}`);
+                    }
+
+                    multiloc[parseInt(index)] = locId;
                 }
             }
 
@@ -352,6 +370,14 @@ export function packLocConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
                 throw packStepError(debugname, 'Failed to find suitable loc models');
             }
 
+            models.sort((a, b) => {
+                if (a.shape === b.shape) {
+                    return 0;
+                }
+
+                return a.shape === LocShapeSuffix._8 ? -1 : b.shape === LocShapeSuffix._8 ? 1 : a.shape - b.shape;
+            });
+
             if (models.length > 0) {
                 let centrepieceOnly = true;
                 for (let i = 0; i < models.length; i++) {
@@ -379,7 +405,7 @@ export function packLocConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
                 }
             }
 
-            if (name === null && active !== 0) {
+            if (name === null && active !== 0 && multivarbit === -1) {
                 // edge case: a loc has no name= property but contains a centrepiece_straight shape or active=yes
                 //   we have to transmit a name - so we fall back to the debugname
                 let shouldTransmit: boolean = active === 1;
@@ -407,6 +433,20 @@ export function packLocConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
             if (desc !== null) {
                 client.p1(3);
                 client.pjstr(desc);
+            }
+
+            if (multivarbit !== -1) {
+                if (multiloc.length === 0) {
+                    throw packStepError(debugname, 'multivarbit requires at least one multiloc');
+                }
+
+                client.p1(77);
+                client.p2(multivarbit);
+                client.p1(multiloc.length - 1);
+
+                for (let k = 0; k < multiloc.length; k++) {
+                    client.p2(typeof multiloc[k] === 'undefined' ? 65535 : multiloc[k]);
+                }
             }
 
             if (params.length > 0) {

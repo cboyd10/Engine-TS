@@ -170,6 +170,7 @@ export default class ObjType extends ConfigType {
     resizez = 128;
     ambient = 0;
     contrast = 0;
+    team = 0;
 
     // server-side
     wearpos = -1;
@@ -281,6 +282,8 @@ export default class ObjType extends ConfigType {
             this.ambient = dat.g1b();
         } else if (code === 114) {
             this.contrast = dat.g1b();
+        } else if (code === 115) {
+            this.team = dat.g1();
         } else if (code === 201) {
             this.respawnrate = dat.g2();
         } else if (code === 249) {

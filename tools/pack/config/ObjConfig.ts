@@ -20,6 +20,7 @@ export function parseObjConfig(key: string, value: string): ConfigValue | null |
         'cost', 'respawnrate',
         'resizex', 'resizey', 'resizez',
         'ambient', 'contrast',
+        'team'
     ];
     // prettier-ignore
     const booleanKeys = [
@@ -413,6 +414,9 @@ export function packObjConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
                     client.p1(value as number);
                 } else if (key === 'contrast') {
                     client.p1(114);
+                    client.p1(value as number);
+                } else if (key === 'team') {
+                    client.p1(115);
                     client.p1(value as number);
                 } else if (key === 'respawnrate') {
                     server.p1(201);

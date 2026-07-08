@@ -102,6 +102,8 @@ export default class LocType extends ConfigType {
     forcedecor = false;
     breakroutefinding = false;
     raiseobject = -1;
+    multivarbit = -1;
+    multiloc: number[] = [];
 
     // server-side
     category = -1;
@@ -204,6 +206,15 @@ export default class LocType extends ConfigType {
             this.breakroutefinding = true;
         } else if (code === 75) {
             this.raiseobject = dat.g1();
+        } else if (code === 77) {
+            this.multivarbit = dat.g2();
+
+            const count = dat.g1();
+            this.multiloc = new Array(count + 1);
+            for (let i = 0; i <= count; i++) {
+                const loc = dat.g2();
+                this.multiloc[i] = loc === 65535 ? -1 : loc;
+            }
         } else if (code === 249) {
             this.params = ParamHelper.decodeParams(dat);
         } else if (code === 250) {
