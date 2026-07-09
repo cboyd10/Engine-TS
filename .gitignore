@@ -1,31 +1,17 @@
 out/
 .env
-package-lock.json
 tsconfig.tsbuildinfo
 
 data/pack/
 data/src/
 data/unpack/
-
-data/players/
-data/sessions/
-data/symbols/
-
-data/config/worlds.json
-data/config/login.json
-data/config/friend.json
+data/config/
 
 dump/
 
+data/players/
+
 node_modules/
-
-# keep these precompiled files out of the repo
-bz2.dll
-JagCompress.jar
-RuneScriptCompiler.jar
-PreloadedDirs.ts
-
-*.bz2
 
 db.sqlite
 db.sqlite-journal

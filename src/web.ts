@@ -1,53 +1,258 @@
+import fs from 'fs';
+import http, { type IncomingHttpHeaders, type IncomingMessage, type ServerResponse } from 'http';
+import path from 'path';
+import { Readable } from 'stream';
+import type { ReadableStream as NodeReadableStream } from 'stream/web';
+
 import { register } from 'prom-client';
+import { WebSocketServer } from 'ws';
 
 import { CrcBuffer } from '#/cache/CrcTable.js';
+import World from '#/engine/World.js';
+import { LoggerEventType } from '#/server/logger/LoggerEventType.js';
+import NullClientSocket from '#/server/NullClientSocket.js';
+import WSClientSocket from '#/server/ws/WSClientSocket.js';
 import Environment from '#/util/Environment.js';
 import OnDemand from '#/engine/OnDemand.js';
 
-export async function startWeb() {
-    Bun.serve({
-        port: Environment.WEB_PORT,
+type NodeRequestInit = RequestInit & {
+    duplex?: 'half';
+};
 
-        async fetch(req) {
-            const url = new URL(req.url ?? `', 'http://${req.headers.get('host')}`);
+const MIME_TYPES = new Map<string, string>();
+MIME_TYPES.set('.js', 'application/javascript');
+MIME_TYPES.set('.mjs', 'application/javascript');
+MIME_TYPES.set('.css', 'text/css');
+MIME_TYPES.set('.html', 'text/html');
+MIME_TYPES.set('.wasm', 'application/wasm');
+MIME_TYPES.set('.sf2', 'application/octet-stream');
 
-            if (url.pathname.startsWith('/crc')) {
-                return new Response(Buffer.from(CrcBuffer.data));
-            } else if (url.pathname.startsWith('/title')) {
-                return new Response(Buffer.from(OnDemand.cache.read(0, 1)!));
-            } else if (url.pathname.startsWith('/config')) {
-                return new Response(Buffer.from(OnDemand.cache.read(0, 2)!));
-            } else if (url.pathname.startsWith('/interface')) {
-                return new Response(Buffer.from(OnDemand.cache.read(0, 3)!));
-            } else if (url.pathname.startsWith('/media')) {
-                return new Response(Buffer.from(OnDemand.cache.read(0, 4)!));
-            } else if (url.pathname.startsWith('/versionlist')) {
-                return new Response(Buffer.from(OnDemand.cache.read(0, 5)!));
-            } else if (url.pathname.startsWith('/textures')) {
-                return new Response(Buffer.from(OnDemand.cache.read(0, 6)!));
-            } else if (url.pathname.startsWith('/wordenc')) {
-                return new Response(Buffer.from(OnDemand.cache.read(0, 7)!));
-            } else if (url.pathname.startsWith('/sounds')) {
-                return new Response(Buffer.from(OnDemand.cache.read(0, 8)!));
-            } else {
-                return new Response(null, { status: 404 });
-            }
+function getHeader(headers: Headers | IncomingHttpHeaders, name: string): string | null {
+    if (headers instanceof Headers) {
+        return headers.get(name);
+    }
+
+    const value = headers[name.toLowerCase()];
+    if (Array.isArray(value)) {
+        return value[0] ?? null;
+    }
+
+    return value ?? null;
+}
+
+function streamFile(filePath: string, contentType?: string): Response {
+    return new Response(Readable.toWeb(fs.createReadStream(filePath)) as ReadableStream, {
+        headers: {
+            'Content-Type': contentType ?? MIME_TYPES.get(path.extname(filePath)) ?? 'text/plain'
         }
     });
 }
 
-export async function startManagementWeb() {
-    Bun.serve({
-        port: Environment.WEB_MANAGEMENT_PORT,
-        routes: {
-            '/prometheus': new Response(await register.metrics(), {
-                headers: {
-                    'Content-Type': register.contentType
+function fileExists(filePath: string): boolean {
+    try {
+        return fs.statSync(filePath).isFile();
+    } catch {
+        return false;
+    }
+}
+
+async function handleWebRequest(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+
+    if (req.method === 'GET') {
+        if (url.pathname.startsWith('/crc')) {
+            return new Response(Buffer.from(CrcBuffer.data));
+        } else if (url.pathname.startsWith('/title')) {
+            return new Response(Buffer.from(OnDemand.cache.read(0, 1)!));
+        } else if (url.pathname.startsWith('/config')) {
+            return new Response(Buffer.from(OnDemand.cache.read(0, 2)!));
+        } else if (url.pathname.startsWith('/interface')) {
+            return new Response(Buffer.from(OnDemand.cache.read(0, 3)!));
+        } else if (url.pathname.startsWith('/media')) {
+            return new Response(Buffer.from(OnDemand.cache.read(0, 4)!));
+        } else if (url.pathname.startsWith('/versionlist')) {
+            return new Response(Buffer.from(OnDemand.cache.read(0, 5)!));
+        } else if (url.pathname.startsWith('/textures')) {
+            return new Response(Buffer.from(OnDemand.cache.read(0, 6)!));
+        } else if (url.pathname.startsWith('/wordenc')) {
+            return new Response(Buffer.from(OnDemand.cache.read(0, 7)!));
+        } else if (url.pathname.startsWith('/sounds')) {
+            return new Response(Buffer.from(OnDemand.cache.read(0, 8)!));
+        }
+
+        const publicPath = `public${url.pathname}`;
+        if (fileExists(publicPath)) {
+            return streamFile(publicPath, MIME_TYPES.get(path.extname(url.pathname ?? '')) ?? 'text/plain');
+        }
+    }
+
+    return new Response(null, { status: 404 });
+}
+
+async function handleManagementRequest(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+
+    if (url.pathname === '/prometheus') {
+        return new Response(await register.metrics(), {
+            headers: {
+                'Content-Type': register.contentType
+            }
+        });
+    }
+
+    return new Response(null, { status: 404 });
+}
+
+function createRequest(req: IncomingMessage, fallbackPort: number): Request {
+    const method = req.method ?? 'GET';
+    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? `localhost:${fallbackPort}`}`);
+    const headers = new Headers();
+
+    for (const [key, value] of Object.entries(req.headers)) {
+        if (typeof value === 'undefined') {
+            continue;
+        }
+
+        if (Array.isArray(value)) {
+            for (const item of value) {
+                headers.append(key, item);
+            }
+        } else {
+            headers.set(key, value);
+        }
+    }
+
+    if (method === 'GET' || method === 'HEAD') {
+        return new Request(url, { method, headers });
+    }
+
+    const init: NodeRequestInit = {
+        method,
+        headers,
+        body: Readable.toWeb(req) as ReadableStream,
+        duplex: 'half'
+    };
+
+    return new Request(url, init);
+}
+
+async function writeResponse(res: ServerResponse, response: Response): Promise<void> {
+    res.statusCode = response.status;
+    response.headers.forEach((value, key) => {
+        res.setHeader(key, value);
+    });
+
+    if (!response.body) {
+        res.end();
+        return;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+        Readable.fromWeb(response.body as unknown as NodeReadableStream).pipe(res);
+        res.on('finish', resolve);
+        res.on('error', reject);
+    });
+}
+
+export async function startWeb(): Promise<void> {
+    const server = http.createServer(async (req, res) => {
+        try {
+            const response = await handleWebRequest(createRequest(req, Environment.WEB_PORT));
+            await writeResponse(res, response);
+        } catch (err) {
+            console.error(err);
+            res.statusCode = 500;
+            res.end();
+        }
+    });
+
+    const websocket = new WebSocketServer({
+        noServer: true,
+        maxPayload: 2000
+    });
+
+    server.on('upgrade', (req, socket, head) => {
+        const url = new URL(req.url ?? '/', `http://${req.headers.host ?? `localhost:${Environment.WEB_PORT}`}`);
+        if (url.pathname !== '/') {
+            socket.destroy();
+            return;
+        }
+
+        const origin = getHeader(req.headers, 'origin');
+        if (Environment.WEB_ALLOWED_ORIGIN && origin !== Environment.WEB_ALLOWED_ORIGIN) {
+            socket.destroy();
+            return;
+        }
+
+        websocket.handleUpgrade(req, socket, head, ws => {
+            const client = new WSClientSocket();
+            client.init(
+                {
+                    send(data: Uint8Array) {
+                        ws.send(data);
+                    },
+                    close() {
+                        ws.close();
+                    },
+                    terminate() {
+                        ws.terminate();
+                    }
+                },
+                req.socket.remoteAddress ?? 'unknown'
+            );
+
+            ws.on('message', (message: Buffer<ArrayBufferLike>) => {
+                try {
+                    if (client.state === -1 || client.remaining <= 0) {
+                        client.terminate();
+                        return;
+                    }
+
+                    client.buffer(message);
+
+                    if (client.state === 0) {
+                        World.onClientData(client);
+                    } else if (client.state === 2) {
+                        OnDemand.onClientData(client);
+                    }
+                } catch (_) {
+                    ws.terminate();
                 }
-            })
-        },
-        fetch() {
-            return new Response(null, { status: 404 });
-        },
+            });
+
+            ws.on('close', () => {
+                client.state = -1;
+
+                if (client.player) {
+                    client.player.addSessionLog(LoggerEventType.ENGINE, 'WS socket closed');
+                    client.player.client = new NullClientSocket();
+                }
+            });
+
+            ws.on('error', () => {
+                ws.terminate();
+            });
+        });
+    });
+
+    await new Promise<void>(resolve => {
+        server.listen(Environment.WEB_PORT, '0.0.0.0', () => resolve());
+    });
+}
+
+export async function startManagementWeb(): Promise<void> {
+    const server = http.createServer(async (req, res) => {
+        try {
+            const response = await handleManagementRequest(createRequest(req, Environment.WEB_MANAGEMENT_PORT));
+            await writeResponse(res, response);
+        } catch (err) {
+            console.error(err);
+            res.statusCode = 500;
+            res.end();
+        }
+    });
+
+    await new Promise<void>(resolve => {
+        server.listen(Environment.WEB_MANAGEMENT_PORT, '0.0.0.0', () => resolve());
     });
 }

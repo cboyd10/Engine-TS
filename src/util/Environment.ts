@@ -3,8 +3,6 @@ import { tryParseBoolean, tryParseInt, tryParseString } from '#/util/TryParse.js
 import { WalkTriggerSetting } from '#/engine/entity/WalkTriggerSetting.js';
 
 export default {
-    IS_BUN: typeof process.versions.bun !== 'undefined', // not user-configurable
-
     EASY_STARTUP: tryParseBoolean(process.env.EASY_STARTUP, false),
     WEBSITE_REGISTRATION: tryParseBoolean(process.env.WEBSITE_REGISTRATION, true),
 

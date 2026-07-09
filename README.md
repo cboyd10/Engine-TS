@@ -26,10 +26,13 @@ In absence of the [Server](https://github.com/LostCityRS/Server) scripts, downlo
 git clone https://github.com/LostCityRS/Engine-TS -b 377-wip --single-branch engine
 git clone https://github.com/LostCityRS/Content -b 377-wip --single-branch content
 cd engine
-bun start
+npm start
 ```
 
 \* *use `--single-branch` when you don't need to track the commit history of all versions*
+
+Open [http://localhost:8898/setup](http://localhost:8898/setup) to configure world settings.
+This page reads and writes `data/config/world.json` through the management server.
 
 ### Client
 
@@ -42,17 +45,16 @@ Be aware it may have compatibility issues (that are addressed in the Client-Java
 
 ## Dependencies
 
-- [Bun 1.2](https://bun.sh)
-- [Java 17](https://adoptium.net) - later LTS versions are also fine.
+- [Node.js 24+](https://nodejs.org)
 
 > [!TIP]
 > If you're using VS Code (recommended), [we have an extension to install on the marketplace.](https://marketplace.visualstudio.com/items?itemName=2004scape.runescriptlanguage)
 
 ## Workflow
 
-Content developers should run `bun start`. The server will watch for changes to scripts and configs, then automatically repack everything.
+Content developers should run `npm start`. The server will watch for changes to scripts and configs, then automatically repack everything.
 
-Engine developers should run `bun dev`. This does what `bun start` does above, but also completely restarts the server when engine code has changed.
+Engine developers should run `npm run dev`. This does what `npm start` does above, but also completely restarts the server when engine code has changed.
 
 ## Common Issues
 

@@ -110,9 +110,9 @@ type LogoutRequest = {
 };
 
 class World {
-    private loginThread = new Worker('./src/server/login/LoginThread.ts');
-    private friendThread = new Worker('./src/server/friend/FriendThread.ts');
-    private loggerThread = new Worker('./src/server/logger/LoggerThread.ts');
+    private loginThread = new Worker(new URL('../server/login/LoginThread.ts', import.meta.url));
+    private friendThread = new Worker(new URL('../server/friend/FriendThread.ts', import.meta.url));
+    private loggerThread = new Worker(new URL('../server/logger/LoggerThread.ts', import.meta.url));
     private devThread: Worker | null = null;
 
     private static readonly PLAYERS: number = Environment.NODE_MAX_PLAYERS;
@@ -319,11 +319,7 @@ class World {
             }
         }
 
-        if (Environment.WEB_PORT === 80) {
-            printInfo(kleur.green().bold('World ready') + kleur.white().bold(': Visit http://localhost/rs2.cgi'));
-        } else {
-            printInfo(kleur.green().bold('World ready') + kleur.white().bold(': Visit http://localhost:' + Environment.WEB_PORT + '/rs2.cgi'));
-        }
+        printInfo(kleur.green().bold('World ready'));
 
         if (startCycle) {
             OnDemand.cycle();
@@ -908,11 +904,13 @@ class World {
 
                 player.client.state = 1;
 
-                player.client.send(Uint8Array.from([
-                    2,
-                    Math.min(player.staffModLevel, 2),
-                    1 // mouse tracking can only be enabled on login
-                ]));
+                player.client.send(
+                    Uint8Array.from([
+                        2,
+                        Math.min(player.staffModLevel, 2),
+                        1 // mouse tracking can only be enabled on login
+                    ])
+                );
 
                 const remote = player.client.remoteAddress;
                 if (remote.indexOf('.') !== -1) {
@@ -1748,7 +1746,7 @@ class World {
     }
 
     private createDevThread() {
-        this.devThread = new Worker('./src/cache/DevThread.ts');
+        this.devThread = new Worker(new URL('../cache/DevThread.ts', import.meta.url));
 
         this.devThread.on('message', msg => {
             try {
@@ -1877,10 +1875,7 @@ class World {
             } else if (reply === 10) {
                 // hop timer
                 const { remaining } = msg;
-                client.send(Uint8Array.from([
-                    21,
-                    Math.min(255, remaining! / 1000)
-                ]));
+                client.send(Uint8Array.from([21, Math.min(255, remaining! / 1000)]));
                 client.close();
                 return;
             }
@@ -2145,7 +2140,7 @@ class World {
             client.send(seed.data);
         } else if (client.opcode === 16 || client.opcode === 18) {
             let rev = World.loginBuf.g1();
-            if (rev === 0xFF) {
+            if (rev === 0xff) {
                 rev = World.loginBuf.g2();
             }
             if (rev !== Environment.ENGINE_REVISION) {

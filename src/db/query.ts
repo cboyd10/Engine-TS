@@ -1,17 +1,17 @@
-import { Database } from 'bun:sqlite';
 import { Kysely, MysqlDialect } from 'kysely';
 import type { Dialect, LogEvent } from 'kysely';
 import { createPool } from 'mysql2';
+import { DatabaseSync } from 'node:sqlite';
 
 import { DB } from '#/db/types.js';
-import { BunSqliteDialect } from './dialect/BunSqliteDialect.js';
+import { NodeSqliteDialect } from '#/db/dialect/NodeSqliteDialect.js';
 import Environment from '#/util/Environment.js';
 
 let dialect: Dialect;
 
 if (Environment.DB_BACKEND === 'sqlite') {
-    dialect = new BunSqliteDialect({
-        database: new Database('db.sqlite')
+    dialect = new NodeSqliteDialect({
+        database: new DatabaseSync('db.sqlite')
     });
 } else {
     dialect = new MysqlDialect({
