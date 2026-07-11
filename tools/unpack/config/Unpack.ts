@@ -4,7 +4,7 @@ import FileStream from '#/io/FileStream.js';
 import Jagfile from '#/io/Jagfile.js';
 import Packet from '#/io/Packet.js';
 import { printFatalError, printInfo } from '#/util/Logger.js';
-import { FloPack, IdkPack, LocPack, ModelPack, NpcPack, ObjPack, SeqPack, SpotAnimPack, VarbitPack, VarpPack } from '#tools/pack/PackFile.js';
+import { AnimPack, FloPack, IdkPack, LocPack, ModelPack, NpcPack, ObjPack, SeqPack, SpotAnimPack, TexturePack, VarbitPack, VarpPack } from '#tools/pack/PackFile.js';
 
 import { ConfigIdx } from './Common.js';
 import { unpackSeqConfig } from './SeqConfig.js';
@@ -19,6 +19,13 @@ import { unpackSpotAnimConfig } from './SpotAnimConfig.js';
 import Model from '#/cache/graphics/Model.js';
 import { listFilesExt } from '#tools/pack/Parse.js';
 import { unpackVarbitConfig } from '#tools/unpack/config/VarbitConfig.js';
+
+function loadPackFiles() {
+    for (const pack of [AnimPack, FloPack, IdkPack, LocPack, ModelPack, NpcPack, ObjPack, SeqPack, SpotAnimPack, TexturePack, VarpPack, VarbitPack]) {
+        pack.clear();
+        pack.load(`${Environment.build.srcDir}/pack/${pack.type}.pack`);
+    }
+}
 
 function readConfigIdx(idx: Packet | null, dat: Packet | null): ConfigIdx {
     if (!idx || !dat) {
@@ -281,6 +288,8 @@ function unpackConfigs(revision: string) {
         printFatalError('Place a functional cache inside data/unpack to continue.');
     }
 
+    loadPackFiles();
+
     const cache = new FileStream('data/unpack');
     const temp = cache.read(0, 2);
     if (!temp) {
@@ -354,4 +363,4 @@ function unpackConfigs(revision: string) {
     printInfo('Done! Manual post processing may be required.');
 }
 
-unpackConfigs('274');
+unpackConfigs('289');

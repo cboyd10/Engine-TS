@@ -212,8 +212,10 @@ export default class LocType extends ConfigType {
             const count = dat.g1();
             this.multiloc = new Array(count + 1);
             for (let i = 0; i <= count; i++) {
-                const loc = dat.g2();
-                this.multiloc[i] = loc === 65535 ? -1 : loc;
+                this.multiloc[i] = dat.g2();
+                if (this.multiloc[i] === 65535) {
+                    this.multiloc[i] = -1;
+                }
             }
         } else if (code === 249) {
             this.params = ParamHelper.decodeParams(dat);

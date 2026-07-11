@@ -39,7 +39,7 @@ export function parseLocConfig(key: string, value: string): ConfigValue | null |
         'op1', 'op2', 'op3', 'op4', 'op5',
         // defer parsing to packing stage:
         'model', 'model2', 'model3', 'model4', 'model5',
-        'multivarbit', 'multiloc',
+        'multivar', 'multiloc',
     ];
     // prettier-ignore
     const numberKeys = [
@@ -314,13 +314,13 @@ export function packLocConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
                 } else if (key === 'raiseobject') {
                     client.p1(75);
                     client.pbool(value as boolean);
-                } else if (key === 'multivarbit') {
-                    const varbit = VarbitPack.getByName(value as string);
-                    if (varbit === -1) {
-                        throw packStepError(debugname, `Unknown multivarbit: ${value}`);
+                } else if (key === 'multivar') {
+                    const varbitId = VarbitPack.getByName(value as string);
+                    if (varbitId === -1) {
+                        throw packStepError(debugname, `Unknown multivar: ${value}`);
                     }
 
-                    multivarbit = varbit;
+                    multivarbit = varbitId;
                 } else if (key === 'multiloc') {
                     const [index, loc] = (value as string).split(',');
                     const locId = LocPack.getByName(loc);
@@ -436,16 +436,16 @@ export function packLocConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
             }
 
             if (multivarbit !== -1) {
-                if (multiloc.length === 0) {
-                    throw packStepError(debugname, 'multivarbit requires at least one multiloc');
-                }
-
                 client.p1(77);
                 client.p2(multivarbit);
-                client.p1(multiloc.length - 1);
 
+                client.p1(multiloc.length - 1);
                 for (let k = 0; k < multiloc.length; k++) {
-                    client.p2(typeof multiloc[k] === 'undefined' ? 65535 : multiloc[k]);
+                    if (typeof multiloc[k] !== 'undefined') {
+                        client.p2(multiloc[k]);
+                    } else {
+                        client.p2(65535);
+                    }
                 }
             }
 

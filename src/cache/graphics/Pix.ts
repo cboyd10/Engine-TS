@@ -50,7 +50,17 @@ export default class Pix {
             name = overrideName;
         }
         if (png) {
-            await png.write(`${path}/${name}.png`);
+            const file: `${string}.${string}` = `${path}/${name}.png`;
+            let write = true;
+
+            if (fs.existsSync(file)) {
+                const existing = await Jimp.read(fs.readFileSync(file));
+                write = existing.bitmap.width !== png.bitmap.width || existing.bitmap.height !== png.bitmap.height || Buffer.compare(Buffer.from(existing.bitmap.data), Buffer.from(png.bitmap.data)) !== 0;
+            }
+
+            if (write) {
+                await png.write(file);
+            }
         }
 
         if (!fs.existsSync(`${path}/meta/`)) {
