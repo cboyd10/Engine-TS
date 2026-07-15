@@ -335,6 +335,12 @@ export function packNpcConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
                 } else if (key === 'category') {
                     server.p1(18);
                     server.p2(value as number);
+                } else if (key === 'wanderrange') {
+                    server.p1(26);
+                    server.p2(value as number);
+                } else if (key === 'maxrange') {
+                    server.p1(27);
+                    server.p2(value as number);
                 } else if (key.startsWith('op')) {
                     const index = parseInt(key.substring('op'.length)) - 1;
                     client.p1(30 + index);
@@ -394,12 +400,6 @@ export function packNpcConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
                 } else if (key === 'turnspeed') {
                     client.p1(103);
                     client.p2(value as number);
-                } else if (key === 'wanderrange') {
-                    server.p1(200);
-                    server.p2(value as number);
-                } else if (key === 'maxrange') {
-                    server.p1(201);
-                    server.p2(value as number);
                 } else if (key === 'huntrange') {
                     server.p1(202);
                     server.p1(value as number);

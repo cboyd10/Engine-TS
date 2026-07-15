@@ -143,6 +143,10 @@ export default class NpcType extends ConfigType {
             this.walkanim_l = dat.g2();
         } else if (code === 18) {
             this.category = dat.g2();
+        } else if (code === 26) {
+            this.wanderrange = dat.g2();
+        } else if (code === 27) {
+            this.maxrange = dat.g2();
         } else if (code >= 30 && code < 40) {
             if (!this.op) {
                 this.op = new Array(5).fill(null);
@@ -201,10 +205,6 @@ export default class NpcType extends ConfigType {
             this.headicon = dat.g2();
         } else if (code === 103) {
             this.turnspeed = dat.g2();
-        } else if (code === 200) {
-            this.wanderrange = dat.g2();
-        } else if (code === 201) {
-            this.maxrange = dat.g2();
         } else if (code === 202) {
             this.huntrange = dat.g1();
         } else if (code === 203) {
