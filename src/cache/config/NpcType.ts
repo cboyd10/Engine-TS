@@ -100,7 +100,7 @@ export default class NpcType extends ConfigType {
     regenrate = 100;
     category = -1;
     wanderrange = 5;
-    maxrange = 7;
+    maxrange = -1; // default to wanderrange + 2 if not set
     huntrange = 0;
     timer = -1;
     respawnrate = 100; // default to 1-minute
@@ -115,6 +115,16 @@ export default class NpcType extends ConfigType {
     patrolCoord: number[] = [];
     patrolDelay: number[] = [];
     givechase = true;
+
+    postDecode() {
+        if (this.maxrange === -1) {
+            this.maxrange = this.wanderrange + 2;
+        }
+
+        if (this.maxrange < this.wanderrange) {
+            this.maxrange = this.wanderrange;
+        }
+    }
 
     decode(code: number, dat: Packet): void {
         if (code === 1) {
