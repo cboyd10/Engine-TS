@@ -451,6 +451,15 @@ const PlayerOps: CommandHandlers = {
         state.activePlayer.teleport(coord.x, coord.z, coord.level);
     }),
 
+    [ScriptOpcode.P_TRANSMOGRIFY]: checkedHandler(ActivePlayer, state => {
+        const id = state.popInt();
+        if (id < -1 || id >= NpcType.count) {
+            throw new Error('Invalid npc.');
+        }
+
+        state.activePlayer.npcId = id;
+    }),
+
     // https://x.com/JagexAsh/status/1605130887292751873
     // https://x.com/JagexAsh/status/1698248664349614138
     [ScriptOpcode.P_WALK]: checkedHandler(ProtectedActivePlayer, state => {
