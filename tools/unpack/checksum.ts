@@ -20,4 +20,5 @@ printCrcs('title', cache.read(0, 1)!);
 printCrcs('config', cache.read(0, 2)!);
 printCrcs('interface', cache.read(0, 3)!);
 printCrcs('media', cache.read(0, 4)!);
+printCrcs('wordenc', cache.read(0, 7)!);
 printCrcs('synth', cache.read(0, 8)!);
