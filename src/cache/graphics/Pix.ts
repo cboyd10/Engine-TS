@@ -67,15 +67,11 @@ export default class Pix {
             fs.mkdirSync(`${path}/meta`, { recursive: true });
         }
 
+        const metadataPath = `${path}/meta/${name}.opt`;
         if (all.length > 1) {
-            let opt = `${all[0].width}x${all[0].height}\n`;
-            for (let i = 0; i < all.length; i++) {
-                opt += `${all[i].cropLeft},${all[i].cropTop},${all[i].cropRight},${all[i].cropBottom}\n`;
-            }
-
-            fs.writeFileSync(`${path}/meta/${name}.opt`, opt);
-        } else if (all[0].cropLeft !== 0 || all[0].cropTop !== 0 || all[0].cropRight !== all[0].width || all[0].cropBottom !== all[0].height) {
-            fs.writeFileSync(`${path}/meta/${name}.opt`, `${all[0].cropLeft},${all[0].cropTop},${all[0].cropRight},${all[0].cropBottom}\n`);
+            fs.writeFileSync(metadataPath, `${all[0].width}x${all[0].height}\n`);
+        } else if (fs.existsSync(metadataPath)) {
+            fs.unlinkSync(metadataPath);
         }
     }
 
