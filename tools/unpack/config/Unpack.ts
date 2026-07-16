@@ -110,8 +110,6 @@ function reorderUnpacked(config: string[], settings: { moveName: boolean; moveDe
             model.push(line);
         } else if (settings.moveRecol && (line.startsWith('recol') || line.startsWith('retex'))) {
             recol.push(line);
-        } else if (!line.startsWith('hasalpha=') && !line.startsWith('code9=')) {
-            others.push(line);
         }
     }
     return [...debugname, ...name, ...desc, ...model, ...recol, ...others];

@@ -89,8 +89,6 @@ export function unpackObjConfig(config: ConfigIdx, id: number, compare?: ConfigI
         } else if (code === 8) {
             const yof2d = dat.g2s();
             def.push(`2dyof=${yof2d}`);
-        } else if (code === 9) {
-            def.push('code9=yes');
         } else if (code === 10) {
             const seqId = dat.g2();
 

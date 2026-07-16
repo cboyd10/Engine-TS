@@ -250,8 +250,6 @@ export function unpackLocConfig(config: ConfigIdx, id: number): string[] {
 
             const seq = SeqPack.getById(seqId) || 'seq_' + seqId;
             def.push(`anim=${seq}`);
-        } else if (code === 25) {
-            def.push('hasalpha=yes');
         } else if (code === 28) {
             const wallwidth = dat.g1();
             def.push(`wallwidth=${wallwidth}`);

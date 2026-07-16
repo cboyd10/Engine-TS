@@ -29,7 +29,7 @@ export function parseNpcConfig(key: string, value: string): ConfigValue | null |
     ];
     // prettier-ignore
     const booleanKeys = [
-        'hasalpha', 'minimap', 'members', 'givechase', 'alwaysontop'
+        'minimap', 'members', 'givechase', 'alwaysontop'
     ];
 
     if (stringKeys.includes(key)) {
@@ -327,10 +327,6 @@ export function packNpcConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
                     } else {
                         client.p1(14);
                         client.p2(value as number);
-                    }
-                } else if (key === 'hasalpha') {
-                    if (value === true) {
-                        client.p1(16);
                     }
                 } else if (key === 'category') {
                     server.p1(18);

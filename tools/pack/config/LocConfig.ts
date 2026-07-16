@@ -55,7 +55,6 @@ export function parseLocConfig(key: string, value: string): ConfigValue | null |
     const booleanKeys = [
         'blockwalk', 'blockrange',
         'active', 'hillskew', 'sharelight', 'occlude',
-        'hasalpha',
         'mirror', 'shadow',
         'forcedecor',
         'breakroutefinding', 'raiseobject'
@@ -248,10 +247,6 @@ export function packLocConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
                 } else if (key === 'anim') {
                     client.p1(24);
                     client.p2(value as number);
-                } else if (key === 'hasalpha') {
-                    if (value === true) {
-                        client.p1(25);
-                    }
                 } else if (key === 'wallwidth') {
                     client.p1(28);
                     client.p1(value as number);

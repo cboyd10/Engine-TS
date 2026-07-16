@@ -73,13 +73,11 @@ export default class NpcType extends ConfigType {
     size = 1;
     models: Uint16Array | null = null;
     heads: Uint16Array | null = null;
-    hasanim = false;
     readyanim = -1;
     walkanim = -1;
     walkanim_b = -1;
     walkanim_r = -1;
     walkanim_l = -1;
-    hasalpha = false;
     recol_s: Uint16Array | null = null;
     recol_d: Uint16Array | null = null;
     op: (string | null)[] | null = null;
@@ -144,8 +142,6 @@ export default class NpcType extends ConfigType {
             this.readyanim = dat.g2();
         } else if (code === 14) {
             this.walkanim = dat.g2();
-        } else if (code === 16) {
-            this.hasanim = true;
         } else if (code === 17) {
             this.walkanim = dat.g2();
             this.walkanim_b = dat.g2();
