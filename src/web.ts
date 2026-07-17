@@ -334,8 +334,7 @@ export async function startWeb(): Promise<void> {
         }
 
         websocket.handleUpgrade(req, socket, head, ws => {
-            const client = new WSClientSocket();
-            client.init(
+            const client = new WSClientSocket(
                 {
                     send(data: Uint8Array) {
                         ws.send(data);
@@ -371,6 +370,7 @@ export async function startWeb(): Promise<void> {
 
             ws.on('close', () => {
                 client.state = -1;
+                OnDemand.onClientClosed(client);
 
                 if (client.player) {
                     client.player.addSessionLog(LoggerEventType.ENGINE, 'WS socket closed');
