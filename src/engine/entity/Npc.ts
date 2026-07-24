@@ -1032,6 +1032,8 @@ export default class Npc extends PathingEntity {
                     quantity = player.invTotal(hunt.checkInv, hunt.checkObj);
                 } else if (hunt.checkObjParam !== -1) {
                     quantity = player.invTotalParam(hunt.checkInv, hunt.checkObjParam);
+                } else if (hunt.checkObjCat !== -1) {
+                    quantity = player.invTotalCat(hunt.checkInv, hunt.checkObjCat);
                 }
                 if (!hunt.checkHuntCondition(quantity, hunt.checkInvCondition, hunt.checkInvVal)) {
                     continue;
