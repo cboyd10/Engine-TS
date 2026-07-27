@@ -37,6 +37,7 @@ export default class NpcType extends ConfigType {
             const config = new NpcType(id);
             config.decodeType(server);
             config.decodeType(client);
+            config.postDecode();
 
             NpcType.configs[id] = config;
 
