@@ -1273,6 +1273,10 @@ const PlayerOps: CommandHandlers = {
         state.activePlayer.setVar(VarPlayerType.RUN, state.activePlayer.run);
     },
 
+    [ScriptOpcode.P_TEMPRUN]: state => {
+        state.activePlayer.tempRun = 1;
+    },
+
     [ScriptOpcode.PLAYERMEMBER]: state => {
         state.pushInt(state.activePlayer.members ? 1 : 0);
     },
