@@ -195,6 +195,8 @@ export default class Npc extends PathingEntity {
         this.nid = -1;
         this.uid = -1;
         this.activeScript = null;
+        this.delayed = false;
+        this.delayedUntil = -1;
         this.huntTarget = null;
         this.queue.clear();
     }
@@ -298,6 +300,9 @@ export default class Npc extends PathingEntity {
             }
             this.heroPoints.clear();
             this.queue.clear();
+            this.activeScript = null;
+            this.delayed = false;
+            this.delayedUntil = -1;
             this.clearWaypoints();
 
             for (let i = 0; i < this.vars.length; i++) {

@@ -669,7 +669,7 @@ class World {
                 npc.turn();
             } catch (err) {
                 console.error(err);
-                this.removeNpc(npc, -1);
+                this.removeNpc(npc, 0);
             }
         }
         this.cycleStats[WorldStat.NPC] = Date.now() - start;
@@ -1305,6 +1305,10 @@ class World {
     }
 
     removeNpc(npc: Npc, duration: number): void {
+        if (!npc.isActive) {
+            return;
+        }
+
         const zone = this.gameMap.getZone(npc.x, npc.z, npc.level);
         const adjustedDuration = this.scaleByPlayerCount(duration);
         zone.leave(npc);
