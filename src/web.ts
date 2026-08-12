@@ -1,47 +1,27 @@
 import fs from 'fs';
-import http, { type IncomingHttpHeaders, type IncomingMessage, type ServerResponse } from 'http';
 import path from 'path';
-import { Readable } from 'stream';
-import type { ReadableStream as NodeReadableStream } from 'stream/web';
 
 import ejs from 'ejs';
+import Fastify from 'fastify';
+import FastifyStatic from '@fastify/static';
+import FastifyView from '@fastify/view';
+import FastifyWebsocket from '@fastify/websocket';
 import { register } from 'prom-client';
-import { WebSocketServer } from 'ws';
 
-import { CrcBuffer } from '#/cache/CrcTable.js';
-import World from '#/engine/World.js';
-import { LoggerEventType } from '#/server/logger/LoggerEventType.js';
-import NullClientSocket from '#/server/NullClientSocket.js';
-import WSClientSocket from '#/server/ws/WSClientSocket.js';
-import Environment from '#/util/Environment.js';
-import { createDefaultWorldConfig, loadWorldConfig, normalizeWorldConfig, saveWorldConfig } from '#/util/WorldConfig.js';
+import { CrcBuffer, CrcTable } from '#/cache/CrcTable.js';
+
 import OnDemand from '#/engine/OnDemand.js';
+import World from '#/engine/World.js';
+
+import NullClientSocket from '#/server/NullClientSocket.js';
+
+import { LoggerEventType } from '#/server/logger/LoggerEventType.js';
+
+import WSClientSocket from '#/server/ws/WSClientSocket.js';
+
+import Environment from '#/util/Environment.js';
 import { tryParseInt } from '#/util/TryParse.js';
-
-type NodeRequestInit = RequestInit & {
-    duplex?: 'half';
-};
-
-const MIME_TYPES = new Map<string, string>();
-MIME_TYPES.set('.js', 'application/javascript');
-MIME_TYPES.set('.mjs', 'application/javascript');
-MIME_TYPES.set('.css', 'text/css');
-MIME_TYPES.set('.html', 'text/html');
-MIME_TYPES.set('.wasm', 'application/wasm');
-MIME_TYPES.set('.sf2', 'application/octet-stream');
-
-function getHeader(headers: Headers | IncomingHttpHeaders, name: string): string | null {
-    if (headers instanceof Headers) {
-        return headers.get(name);
-    }
-
-    const value = headers[name.toLowerCase()];
-    if (Array.isArray(value)) {
-        return value[0] ?? null;
-    }
-
-    return value ?? null;
-}
+import { createDefaultWorldConfig, loadWorldConfig, normalizeWorldConfig, saveWorldConfig } from '#/util/WorldConfig.js';
 
 function resolveContentPath(name: string): string | null {
     let decodedName: string;
@@ -62,14 +42,6 @@ function resolveContentPath(name: string): string | null {
     return targetPath;
 }
 
-function streamFile(filePath: string, contentType?: string): Response {
-    return new Response(Readable.toWeb(fs.createReadStream(filePath)) as ReadableStream, {
-        headers: {
-            'Content-Type': contentType ?? MIME_TYPES.get(path.extname(filePath)) ?? 'text/plain'
-        }
-    });
-}
-
 function fileExists(filePath: string): boolean {
     try {
         return fs.statSync(filePath).isFile();
@@ -78,330 +50,299 @@ function fileExists(filePath: string): boolean {
     }
 }
 
-function jsonResponse(value: unknown, status: number = 200): Response {
-    return new Response(JSON.stringify(value, null, 2), {
-        status,
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    });
-}
+const fastify = Fastify({
+    // logger: true
+});
 
-async function handleWebRequest(req: Request): Promise<Response> {
-    const url = new URL(req.url);
+fastify.register(FastifyView, {
+    engine: {
+        ejs
+    },
+    root: 'view'
+});
 
-    if (req.method === 'GET') {
-        if (url.pathname.startsWith('/crc')) {
-            return new Response(Buffer.from(CrcBuffer.data));
-        } else if (url.pathname.startsWith('/title')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 1)!));
-        } else if (url.pathname.startsWith('/config')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 2)!));
-        } else if (url.pathname.startsWith('/interface')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 3)!));
-        } else if (url.pathname.startsWith('/media')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 4)!));
-        } else if (url.pathname.startsWith('/versionlist')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 5)!));
-        } else if (url.pathname.startsWith('/textures')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 6)!));
-        } else if (url.pathname.startsWith('/wordenc')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 7)!));
-        } else if (url.pathname.startsWith('/sounds')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 8)!));
-        } else if (url.pathname === '/rs2.cgi') {
-            const plugin = tryParseInt(url.searchParams.get('plugin'), 0);
-            const lowmem = tryParseInt(url.searchParams.get('lowmem'), 0);
-
-            if (Environment.node.debug && plugin === 1) {
-                return new Response(
-                    await ejs.renderFile('view/java.ejs', {
-                        nodeid: Environment.node.id,
-                        lowmem,
-                        members: Environment.node.members,
-                        portoff: Environment.node.port - 43594
-                    }),
-                    {
-                        headers: {
-                            'Content-Type': 'text/html'
-                        }
-                    }
-                );
+await fastify.register(FastifyWebsocket, {
+    options: {
+        maxPayload: 1600,
+        perMessageDeflate: false,
+        verifyClient: function (info, next) {
+            if (Environment.web.allowedOrigin && info.req.headers.origin !== Environment.web.allowedOrigin) {
+                next(false);
+                return;
             }
 
-            return new Response(
-                await ejs.renderFile('view/client.ejs', {
-                    nodeid: Environment.node.id,
-                    lowmem,
-                    members: Environment.node.members
-                }),
-                {
-                    headers: {
-                        'Content-Type': 'text/html'
-                    }
-                }
-            );
-        } else if (url.pathname === '/worldmap.jag') {
-            if (fileExists('data/pack/mapview/worldmap.jag')) {
-                return streamFile('data/pack/mapview/worldmap.jag', 'application/octet-stream');
-            }
-        } else if (Environment.node.debug) {
-            if (url.pathname === '/maped') {
-                return new Response(await ejs.renderFile('view/maped.ejs'), {
-                    headers: {
-                        'Content-Type': 'text/html'
-                    }
-                });
-            } else if (url.pathname.startsWith('/content/')) {
-                const name = url.pathname.replace('/content/', '');
-                const filePath = resolveContentPath(name);
-                if (!filePath || !fileExists(filePath)) {
-                    return new Response(null, { status: 404 });
-                }
-
-                return streamFile(filePath, MIME_TYPES.get(path.extname(url.pathname ?? '')) ?? 'text/plain');
-            } else if (url.pathname.startsWith('/data/')) {
-                const name = url.pathname.replace('/data/', '');
-                const filePath = `data/${name}`;
-                if (!fileExists(filePath)) {
-                    return new Response(null, { status: 404 });
-                }
-
-                return streamFile(filePath, MIME_TYPES.get(path.extname(url.pathname ?? '')) ?? 'text/plain');
-            }
-        }
-
-        const publicPath = `public${url.pathname}`;
-        if (fileExists(publicPath)) {
-            return streamFile(publicPath, MIME_TYPES.get(path.extname(url.pathname ?? '')) ?? 'text/plain');
-        }
-    } else if (req.method === 'PUT') {
-        if (Environment.node.debug) {
-            if (url.pathname.startsWith('/content/')) {
-                const name = url.pathname.replace('/content/', '');
-                const filePath = resolveContentPath(name);
-                if (!filePath) {
-                    return new Response(null, { status: 400 });
-                }
-
-                const body = new Uint8Array(await req.arrayBuffer());
-                await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-                await fs.promises.writeFile(filePath, body);
-                return new Response(null, { status: 200 });
-            }
+            next(true);
         }
     }
+});
 
-    return new Response(null, { status: 404 });
-}
+// general routes
 
-async function handleManagementRequest(req: Request): Promise<Response> {
-    const url = new URL(req.url);
-    const method = req.method ?? 'GET';
+fastify.route({
+    method: 'GET',
+    url: '/',
+    handler: (_req, reply) => {
+        return reply.redirect('/rs2.cgi', 302);
+    },
+    wsHandler: (socket, req) => {
+        const client = new WSClientSocket(
+            {
+                send(data: Uint8Array) {
+                    socket.send(data);
+                },
+                close() {
+                    socket.close();
+                },
+                terminate() {
+                    socket.terminate();
+                }
+            },
+            req.socket.remoteAddress ?? 'unknown'
+        );
 
-    if (method === 'GET' && url.pathname === '/setup') {
-        return new Response(await ejs.renderFile('view/setup.ejs'), {
-            headers: {
-                'Content-Type': 'text/html'
-            }
-        });
-    }
-
-    if (url.pathname === '/setup/config') {
-        if (method === 'GET') {
-            return jsonResponse({
-                config: loadWorldConfig(),
-                defaults: createDefaultWorldConfig(),
-                path: 'data/config/world.json'
-            });
-        }
-
-        if (method === 'PUT') {
-            let payload: unknown;
+        socket.on('message', (message: Buffer<ArrayBufferLike>) => {
             try {
-                payload = await req.json();
+                if (client.state === -1 || client.remaining <= 0) {
+                    client.terminate();
+                    return;
+                }
+
+                client.buffer(message);
+
+                if (client.state === 0) {
+                    World.onClientData(client);
+                } else if (client.state === 2) {
+                    OnDemand.onClientData(client);
+                }
             } catch {
-                return jsonResponse({ error: 'Invalid JSON payload' }, 400);
-            }
-
-            const config = normalizeWorldConfig(payload);
-            saveWorldConfig(config);
-
-            return jsonResponse({
-                config,
-                restartRequired: true
-            });
-        }
-
-        return new Response(null, {
-            status: 405,
-            headers: {
-                Allow: 'GET, PUT'
+                socket.terminate();
             }
         });
-    }
 
-    if (url.pathname === '/prometheus') {
-        return new Response(await register.metrics(), {
-            headers: {
-                'Content-Type': register.contentType
+        socket.on('close', () => {
+            client.state = -1;
+            OnDemand.onClientClosed(client);
+
+            if (client.player) {
+                client.player.addSessionLog(LoggerEventType.ENGINE, 'WS socket closed');
+                client.player.client = new NullClientSocket();
             }
         });
+
+        socket.on('error', () => {
+            socket.terminate();
+        });
     }
+});
 
-    return new Response(null, { status: 404 });
-}
+fastify.get<{ Querystring: { plugin?: string; lowmem?: string } }>('/rs2.cgi', async (req, reply) => {
+    const plugin = tryParseInt(req.query.plugin, 0);
+    const lowmem = tryParseInt(req.query.lowmem, 0);
 
-function createRequest(req: IncomingMessage, fallbackPort: number): Request {
-    const method = req.method ?? 'GET';
-    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? `localhost:${fallbackPort}`}`);
-    const headers = new Headers();
-
-    for (const [key, value] of Object.entries(req.headers)) {
-        if (typeof value === 'undefined') {
-            continue;
-        }
-
-        if (Array.isArray(value)) {
-            for (const item of value) {
-                headers.append(key, item);
-            }
-        } else {
-            headers.set(key, value);
-        }
+    if (Environment.node.debug && plugin === 1) {
+        return reply.viewAsync('java.ejs', {
+            portoff: Environment.node.port - 43594,
+            nodeid: Environment.node.id,
+            members: Environment.node.members,
+            lowmem
+        });
+    } else {
+        return reply.viewAsync('client.ejs', {
+            nodeid: Environment.node.id,
+            members: Environment.node.members,
+            lowmem
+        });
     }
+});
 
-    if (method === 'GET' || method === 'HEAD') {
-        return new Request(url, { method, headers });
-    }
+// cache routes
 
-    const init: NodeRequestInit = {
-        method,
-        headers,
-        body: Readable.toWeb(req) as ReadableStream,
-        duplex: 'half'
-    };
+fastify.get('/crc:cachebust', async (_req, reply) => {
+    reply.send(CrcBuffer.data);
+});
 
-    return new Request(url, init);
-}
+fastify.get<{ Params: { crc: string } }>('/title:crc', async (req, reply) => {
+    const { crc } = req.params;
 
-async function writeResponse(res: ServerResponse, response: Response): Promise<void> {
-    res.statusCode = response.status;
-    response.headers.forEach((value, key) => {
-        res.setHeader(key, value);
-    });
-
-    if (!response.body) {
-        res.end();
+    if (tryParseInt(crc, -1) !== CrcTable[1]) {
+        reply.status(404);
         return;
     }
 
-    await new Promise<void>((resolve, reject) => {
-        Readable.fromWeb(response.body as unknown as NodeReadableStream).pipe(res);
-        res.on('finish', resolve);
-        res.on('error', reject);
-    });
-}
+    reply.send(OnDemand.cache.read(0, 1));
+});
 
-export async function startWeb(): Promise<void> {
-    const server = http.createServer(async (req, res) => {
-        try {
-            const response = await handleWebRequest(createRequest(req, Environment.web.port));
-            await writeResponse(res, response);
-        } catch (err) {
-            console.error(err);
-            res.statusCode = 500;
-            res.end();
-        }
-    });
+fastify.get<{ Params: { crc: string } }>('/config:crc', async (req, reply) => {
+    const { crc } = req.params;
 
-    const websocket = new WebSocketServer({
-        noServer: true,
-        maxPayload: 2000
-    });
+    if (tryParseInt(crc, -1) !== CrcTable[2]) {
+        reply.status(404);
+        return;
+    }
 
-    server.on('upgrade', (req, socket, head) => {
-        const url = new URL(req.url ?? '/', `http://${req.headers.host ?? `localhost:${Environment.web.port}`}`);
-        if (url.pathname !== '/') {
-            socket.destroy();
+    reply.send(OnDemand.cache.read(0, 2));
+});
+
+fastify.get<{ Params: { crc: string } }>('/interface:crc', async (req, reply) => {
+    const { crc } = req.params;
+
+    if (tryParseInt(crc, -1) !== CrcTable[3]) {
+        reply.status(404);
+        return;
+    }
+
+    reply.send(OnDemand.cache.read(0, 3));
+});
+
+fastify.get<{ Params: { crc: string } }>('/media:crc', async (req, reply) => {
+    const { crc } = req.params;
+
+    if (tryParseInt(crc, -1) !== CrcTable[4]) {
+        reply.status(404);
+        return;
+    }
+
+    reply.send(OnDemand.cache.read(0, 4));
+});
+
+fastify.get<{ Params: { crc: string } }>('/versionlist:crc', async (req, reply) => {
+    const { crc } = req.params;
+
+    if (tryParseInt(crc, -1) !== CrcTable[5]) {
+        reply.status(404);
+        return;
+    }
+
+    reply.send(OnDemand.cache.read(0, 5));
+});
+
+fastify.get<{ Params: { crc: string } }>('/textures:crc', async (req, reply) => {
+    const { crc } = req.params;
+
+    if (tryParseInt(crc, -1) !== CrcTable[6]) {
+        reply.status(404);
+        return;
+    }
+
+    reply.send(OnDemand.cache.read(0, 6));
+});
+
+fastify.get<{ Params: { crc: string } }>('/wordenc:crc', async (req, reply) => {
+    const { crc } = req.params;
+
+    if (tryParseInt(crc, -1) !== CrcTable[7]) {
+        reply.status(404);
+        return;
+    }
+
+    reply.send(OnDemand.cache.read(0, 7));
+});
+
+fastify.get<{ Params: { crc: string } }>('/sounds:crc', async (req, reply) => {
+    const { crc } = req.params;
+
+    if (tryParseInt(crc, -1) !== CrcTable[8]) {
+        reply.status(404);
+        return;
+    }
+
+    reply.send(OnDemand.cache.read(0, 8));
+});
+
+// map editor routes
+
+if (Environment.node.debug) {
+    fastify.get('/worldmap.jag', async (_req, reply) => {
+        const filePath = 'data/pack/mapview/worldmap.jag';
+
+        if (!fileExists(filePath)) {
+            reply.status(404);
             return;
         }
 
-        const origin = getHeader(req.headers, 'origin');
-        if (Environment.web.allowedOrigin && origin !== Environment.web.allowedOrigin) {
-            socket.destroy();
-            return;
-        }
+        return reply.type('application/octet-stream').send(fs.createReadStream(filePath));
+    });
 
-        websocket.handleUpgrade(req, socket, head, ws => {
-            const client = new WSClientSocket(
-                {
-                    send(data: Uint8Array) {
-                        ws.send(data);
-                    },
-                    close() {
-                        ws.close();
-                    },
-                    terminate() {
-                        ws.terminate();
-                    }
-                },
-                req.socket.remoteAddress ?? 'unknown'
-            );
+    fastify.addContentTypeParser('*', { parseAs: 'buffer' }, (_req, body, done) => {
+        done(null, body);
+    });
 
-            ws.on('message', (message: Buffer<ArrayBufferLike>) => {
-                try {
-                    if (client.state === -1 || client.remaining <= 0) {
-                        client.terminate();
-                        return;
-                    }
+    fastify.get('/maped', async (_req, reply) => {
+        return reply.viewAsync('maped.ejs');
+    });
 
-                    client.buffer(message);
-
-                    if (client.state === 0) {
-                        World.onClientData(client);
-                    } else if (client.state === 2) {
-                        OnDemand.onClientData(client);
-                    }
-                } catch (_) {
-                    ws.terminate();
-                }
-            });
-
-            ws.on('close', () => {
-                client.state = -1;
-                OnDemand.onClientClosed(client);
-
-                if (client.player) {
-                    client.player.addSessionLog(LoggerEventType.ENGINE, 'WS socket closed');
-                    client.player.client = new NullClientSocket();
-                }
-            });
-
-            ws.on('error', () => {
-                ws.terminate();
-            });
+    if (fs.existsSync(Environment.build.srcDir)) {
+        await fastify.register(FastifyStatic, {
+            root: path.resolve(Environment.build.srcDir),
+            prefix: '/content/',
+            decorateReply: false
         });
+    }
+
+    await fastify.register(FastifyStatic, {
+        root: path.join(process.cwd(), 'data'),
+        prefix: '/data/',
+        decorateReply: false
     });
 
-    await new Promise<void>(resolve => {
-        server.listen(Environment.web.port, '0.0.0.0', () => resolve());
+    fastify.put<{ Params: { '*': string } }>('/content/*', async (req, reply) => {
+        const filePath = resolveContentPath(req.params['*']);
+        if (!filePath) {
+            reply.status(400);
+            return;
+        }
+
+        await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.promises.writeFile(filePath, req.body as Uint8Array);
     });
 }
 
-export async function startManagementWeb(): Promise<void> {
-    const server = http.createServer(async (req, res) => {
-        try {
-            const response = await handleManagementRequest(createRequest(req, Environment.web.managementPort));
-            await writeResponse(res, response);
-        } catch (err) {
-            console.error(err);
-            res.statusCode = 500;
-            res.end();
-        }
-    });
+fastify.register(FastifyStatic, {
+    root: path.join(process.cwd(), 'public')
+});
 
-    await new Promise<void>(resolve => {
-        server.listen(Environment.web.managementPort, '0.0.0.0', () => resolve());
-    });
+export async function startWeb() {
+    await fastify.listen({ port: Environment.web.port, host: '0.0.0.0' });
+}
+
+// management routes
+
+const management = Fastify();
+
+management.register(FastifyView, {
+    engine: {
+        ejs
+    },
+    root: 'view'
+});
+
+management.get('/prometheus', async (_req, reply) => {
+    reply.header('Content-Type', register.contentType);
+    return register.metrics();
+});
+
+management.get('/setup', async (_req, reply) => {
+    return reply.viewAsync('setup.ejs');
+});
+
+management.get('/setup/config', async () => {
+    return {
+        config: loadWorldConfig(),
+        defaults: createDefaultWorldConfig(),
+        path: 'data/config/world.json'
+    };
+});
+
+management.put('/setup/config', async req => {
+    const config = normalizeWorldConfig(req.body);
+    saveWorldConfig(config);
+
+    return {
+        config,
+        restartRequired: true
+    };
+});
+
+export async function startManagementWeb() {
+    await management.listen({ port: Environment.web.managementPort, host: '0.0.0.0' });
 }
