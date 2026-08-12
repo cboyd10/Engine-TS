@@ -909,15 +909,24 @@ class World {
 
                 const remote = player.client.remoteAddress;
                 if (remote.indexOf('.') !== -1) {
-                    // IPv4 - last octet determines the bucket
+                    // IPv4
                     const octets = remote.split('.');
-                    const bucket = (parseInt(octets[0]) << 24) | (parseInt(octets[1]) << 16) | (parseInt(octets[2]) << 8) | parseInt(octets[3]);
+                    const bucket = ((parseInt(octets[0]) << 24) | (parseInt(octets[1]) << 16) | (parseInt(octets[2]) << 8) | parseInt(octets[3])) >>> 0;
                     this.playerLoop.add(BigInt(bucket), player);
                 } else if (remote.indexOf(':') !== -1) {
-                    // IPv6 - site prefix determines the bucket
-                    const hextets = remote.split(':');
-                    const bucket = parseInt(hextets[2], 16) % 256;
-                    this.playerLoop.add(BigInt(bucket), player);
+                    // IPv6
+                    const hextets = remote.split('%', 1)[0].split(':');
+                    let omitted = 8 - hextets.filter(Boolean).length;
+                    let key = 0n;
+                    for (const hextet of hextets) {
+                        if (hextet) {
+                            key = (key << 16n) | BigInt(parseInt(hextet, 16));
+                        } else if (omitted) {
+                            key <<= BigInt(omitted * 16);
+                            omitted = 0;
+                        }
+                    }
+                    this.playerLoop.add(key, player);
                 }
             } else {
                 // 127.0.0.1
