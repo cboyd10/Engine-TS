@@ -42,7 +42,7 @@
     "@isaacs/ttlcache": "2.1.5",
     "@jimp/js-png": "1.6.1",
     "@jimp/plugin-quantize": "1.6.1",
-    "@lostcityrs/runescript": "0.9.6",
+    "@lostcityrs/runescript": "0.9.7",
     "bcrypt-ts": "9.0.2",
     "ejs": "6.0.1",
     "fastify": "5.11.3",
