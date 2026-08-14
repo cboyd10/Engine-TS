@@ -83,7 +83,6 @@ export default class LocType extends ConfigType {
     sharelight = false;
     occlude = false;
     anim = -1;
-    hasalpha = false;
     wallwidth = 16;
     ambient = 0;
     contrast = 0;
@@ -154,8 +153,6 @@ export default class LocType extends ConfigType {
             if (this.anim == 65535) {
                 this.anim = -1;
             }
-        } else if (code === 25) {
-            this.hasalpha = true;
         } else if (code === 28) {
             this.wallwidth = dat.g1();
         } else if (code === 29) {

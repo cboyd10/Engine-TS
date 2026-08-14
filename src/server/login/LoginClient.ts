@@ -41,9 +41,13 @@ export class LoginClient extends InternalClient {
             nodeMembers: Environment.NODE_MEMBERS,
             profile: Environment.NODE_PROFILE,
 
-            socket, remoteAddress, uid,
-            username, password,
-            reconnecting, hasSave
+            socket,
+            remoteAddress,
+            uid,
+            username,
+            password,
+            reconnecting,
+            hasSave
         });
 
         if (reply.error) {

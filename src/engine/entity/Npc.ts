@@ -1,6 +1,6 @@
-import { NpcInfoProt } from '@2004scape/rsbuf';
-import * as rsbuf from '@2004scape/rsbuf';
-import { CollisionFlag, CollisionType } from '@2004scape/rsmod-pathfinder';
+import { NpcInfoProt } from '#/network/rsbuf/index.js';
+import * as rsbuf from '#/network/rsbuf/index.js';
+import { CollisionFlag, CollisionType } from '#/engine/routefinder/index.js';
 
 import HuntType from '#/cache/config/HuntType.js';
 import NpcType from '#/cache/config/NpcType.js';
@@ -26,7 +26,7 @@ import { NpcQueueRequest } from '#/engine/entity/NpcQueueRequest.js';
 import { NpcStat } from '#/engine/entity/NpcStat.js';
 import PathingEntity from '#/engine/entity/PathingEntity.js';
 import Player from '#/engine/entity/Player.js';
-import { isFlagged, findNaivePath } from '#/engine/GameMap.js';
+import { canTravel } from '#/engine/GameMap.js';
 import ScriptFile from '#/engine/script/ScriptFile.js';
 import { HuntIterator } from '#/engine/script/ScriptIterators.js';
 import ScriptPointer from '#/engine/script/ScriptPointer.js';
@@ -66,17 +66,16 @@ export default class Npc extends PathingEntity {
     huntTarget: Entity | null = null;
     huntrange: number = 0;
 
-    nextPatrolTick: number = -1;
     nextPatrolPoint: number = 0;
-    delayedPatrol: boolean = false;
+    patrolDelayTicksRemaining: number = -1;
     resetOnRevert: boolean = true;
 
-    wanderCounter: number = 0;
+    stuckCounter: number = 0;
 
     heroPoints: HeroPoints = new HeroPoints(16); // be sure to reset when stats are recovered/reset
 
-    constructor(level: number, x: number, z: number, width: number, length: number, lifecycle: EntityLifeCycle, nid: number, type: number, moveRestrict: MoveRestrict, blockWalk: BlockWalk) {
-        super(level, x, z, width, length, lifecycle, moveRestrict, blockWalk, MoveStrategy.NAIVE, NpcInfoProt.FACE_COORD, NpcInfoProt.FACE_ENTITY);
+    constructor(level: number, x: number, z: number, width: number, length: number, lifecycle: EntityLifeCycle, nid: number, type: number, blockWalk: BlockWalk) {
+        super(level, x, z, width, length, lifecycle, blockWalk, MoveStrategy.NAIVE, NpcInfoProt.FACE_COORD, NpcInfoProt.FACE_ENTITY);
         this.nid = nid;
         this.baseType = type;
         this.type = type;
@@ -100,7 +99,7 @@ export default class Npc extends PathingEntity {
         this.targetOp = npcType.defaultmode;
         this.huntMode = npcType.huntmode;
         this.huntrange = npcType.huntrange;
-        this.wanderCounter = 0;
+        this.stuckCounter = 0;
     }
 
     // ---
@@ -180,6 +179,14 @@ export default class Npc extends PathingEntity {
         this.processQueue();
         // Movement-Interactions
         this.processMovementInteraction();
+        // Reorient during the npc's own turn (not the post-movement processInfo sweep), so an npc that didn't
+        // take a turn this tick keeps its spawn orientation. An npc's target is set during its turn, so both
+        // run here after movement: reorientEntity() (faceAngle toward a player/npc) and reorient() (face a
+        // loc/obj once stopped), then the FACE_ENTITY mask.
+        this.reorientEntity();
+        this.reorient();
+        // Update target facing
+        this.setFaceEntity();
         // Dev note: Is this necessary?
         this.validateDistanceWalked();
     }
@@ -188,6 +195,8 @@ export default class Npc extends PathingEntity {
         this.nid = -1;
         this.uid = -1;
         this.activeScript = null;
+        this.delayed = false;
+        this.delayedUntil = -1;
         this.huntTarget = null;
         this.queue.clear();
     }
@@ -291,6 +300,9 @@ export default class Npc extends PathingEntity {
             }
             this.heroPoints.clear();
             this.queue.clear();
+            this.activeScript = null;
+            this.delayed = false;
+            this.delayedUntil = -1;
             this.clearWaypoints();
 
             for (let i = 0; i < this.vars.length; i++) {
@@ -327,7 +339,7 @@ export default class Npc extends PathingEntity {
         }
 
         if (CoordGrid.intersects(this.x, this.z, this.width, this.length, this.target.x, this.target.z, this.target.width, this.target.length)) {
-            this.queueWaypoints(findNaivePath(this.level, this.x, this.z, this.target.x, this.target.z, this.width, this.length, this.target.width, this.target.length, 0, CollisionType.NORMAL));
+            this.randomWalk();
             return;
         }
 
@@ -362,7 +374,7 @@ export default class Npc extends PathingEntity {
         const moved = this.lastTickX !== this.x || this.lastTickZ !== this.z;
         if (moved) {
             this.lastMovement = World.currentTick + 1;
-            this.wanderCounter = 0;
+            this.stuckCounter = 0;
         }
         return moved;
     }
@@ -375,26 +387,34 @@ export default class Npc extends PathingEntity {
     }
 
     clearPatrol() {
-        this.nextPatrolTick = -1;
+        this.nextPatrolPoint = 0;
+        this.stuckCounter = 0;
+        this.patrolDelayTicksRemaining = -1;
     }
 
     blockWalkFlag(): CollisionFlag {
-        if (this.moveRestrict === MoveRestrict.NORMAL) {
-            return CollisionFlag.NPC;
-        } else if (this.moveRestrict === MoveRestrict.BLOCKED) {
-            return CollisionFlag.OPEN;
-        } else if (this.moveRestrict === MoveRestrict.BLOCKED_NORMAL) {
-            return CollisionFlag.NPC;
-        } else if (this.moveRestrict === MoveRestrict.INDOORS) {
-            return CollisionFlag.NPC;
-        } else if (this.moveRestrict === MoveRestrict.OUTDOORS) {
-            return CollisionFlag.NPC;
-        } else if (this.moveRestrict === MoveRestrict.NOMOVE) {
-            return CollisionFlag.NULL;
-        } else if (this.moveRestrict === MoveRestrict.PASSTHRU) {
-            return CollisionFlag.OPEN;
+        const type: NpcType = NpcType.get(this.type);
+        switch (type.moverestrict) {
+            case MoveRestrict.BLOCKED:
+                return CollisionFlag.OPEN;
+            case MoveRestrict.NOMOVE:
+                return CollisionFlag.NULL;
+            case MoveRestrict.NORMAL:
+            case MoveRestrict.BLOCKED_NORMAL:
+            case MoveRestrict.INDOORS:
+            case MoveRestrict.OUTDOORS:
+            case MoveRestrict.PASSTHRU: {
+                // Hard blocks (locs/walls, blockwalk=all npcs) always apply. Two orthogonal opt-outs:
+                //  - an npc that sets no collision of its own (blockwalk=none) doesn't respect
+                //    npc-occupancy, so it's free to walk through other npcs;
+                //  - a passthru npc doesn't respect player-occupancy, so it walks through players.
+                const npcOcc = this.blockWalk === BlockWalk.NONE ? CollisionFlag.OPEN : CollisionFlag.NPC_OCC;
+                const playerOcc = type.moverestrict === MoveRestrict.PASSTHRU ? CollisionFlag.OPEN : CollisionFlag.PLAYER_OCC;
+                return (CollisionFlag.BLOCK_NPC_AND_PLAYERS | npcOcc | playerOcc) as CollisionFlag;
+            }
+            default:
+                return CollisionFlag.NULL;
         }
-        return CollisionFlag.NULL;
     }
 
     defaultMoveSpeed(): MoveSpeed {
@@ -404,16 +424,12 @@ export default class Npc extends PathingEntity {
     clearInteraction(): void {
         super.clearInteraction();
         this.targetOp = NpcMode.NONE;
-        this.faceEntity = -1;
-        this.masks |= NpcInfoProt.FACE_ENTITY;
     }
 
     resetDefaults(): void {
         this.clearInteraction();
         const type: NpcType = NpcType.get(this.type);
         this.targetOp = type.defaultmode;
-        this.faceEntity = -1;
-        this.masks |= this.entitymask;
 
         const npcType: NpcType = NpcType.get(this.type);
         this.huntMode = npcType.huntmode;
@@ -433,8 +449,9 @@ export default class Npc extends PathingEntity {
         this.uid = (type << 16) | this.nid;
         this.resetOnRevert = reset;
 
+        const npcType = NpcType.get(type);
+
         if (reset) {
-            const npcType = NpcType.get(type);
             for (let index = 0; index < npcType.stats.length; index++) {
                 const level = npcType.stats[index];
                 this.levels[index] = Math.max(level - (this.baseLevels[index] - this.levels[index]), 0);
@@ -685,7 +702,7 @@ export default class Npc extends PathingEntity {
         return true;
     }
 
-    private randomWalk(range: number) {
+    private wander(range: number) {
         const dx = Math.round(Math.random() * (range * 2) - range);
         const dz = Math.round(Math.random() * (range * 2) - range);
         const destX = this.startX + dx;
@@ -705,48 +722,62 @@ export default class Npc extends PathingEntity {
 
         // 1/8 chance to move every tick (even if they already have a destination)
         if (type.moverestrict !== MoveRestrict.NOMOVE && Math.random() < 0.125) {
-            this.randomWalk(type.wanderrange);
+            this.wander(type.wanderrange);
         }
 
         this.updateMovement();
 
         const onSpawn = this.x === this.startX && this.z === this.startZ && this.level === this.startLevel;
 
-        if (this.wanderCounter++ >= 500) {
+        // Npc should teleport 501 ticks after its last movement
+        if (this.stuckCounter++ > 500) {
             if (!onSpawn) {
                 this.teleport(this.startX, this.startZ, this.startLevel);
             }
-            this.wanderCounter = 0;
+            this.stuckCounter = 0;
         }
     }
 
     private patrolMode(): void {
         const type = NpcType.get(this.type);
         const patrolPoints = type.patrolCoord;
-        const patrolDelay = type.patrolDelay[this.nextPatrolPoint];
+
+        if (patrolPoints.length === 0) {
+            this.updateMovement();
+            return;
+        }
+
         let dest = CoordGrid.unpackCoord(patrolPoints[this.nextPatrolPoint]);
 
-        this.updateMovement();
         if (!this.hasWaypoints() && !this.target) {
             // requeue waypoints in cases where an npc was interacting and the interaction has been cleared
             this.queueWaypoint(dest.x, dest.z);
         }
-        if (!(this.x === dest.x && this.z === dest.z) && this.nextPatrolTick > -1 && World.currentTick >= this.nextPatrolTick) {
+
+        this.stuckCounter++;
+
+        // Npc should teleport 32 ticks after its last movement, or if it needs to change floors
+        if (this.stuckCounter >= 32 || this.level !== dest.level) {
             this.teleport(dest.x, dest.z, dest.level);
-        }
-        if (this.x === dest.x && this.z === dest.z && !this.delayedPatrol) {
-            this.nextPatrolTick = World.currentTick + patrolDelay;
-            this.delayedPatrol = true;
-        }
-        if (this.nextPatrolTick > World.currentTick) {
-            return;
+            this.stuckCounter = 0;
         }
 
-        this.nextPatrolPoint = (this.nextPatrolPoint + 1) % patrolPoints.length;
-        this.nextPatrolTick = World.currentTick + 30; // 30 ticks until we force the npc to the next patrol coord
-        this.delayedPatrol = false;
-        dest = CoordGrid.unpackCoord(patrolPoints[this.nextPatrolPoint]); // recalc dest
-        this.queueWaypoint(dest.x, dest.z);
+        if (this.x === dest.x && this.z === dest.z) {
+            // If patrol delay is unitialized, set it to next patroldelay
+            if (this.patrolDelayTicksRemaining < 0) {
+                const patrolDelay = type.patrolDelay[this.nextPatrolPoint] ?? 0;
+                this.patrolDelayTicksRemaining = patrolDelay;
+            }
+
+            if (this.patrolDelayTicksRemaining-- <= 0) {
+                this.nextPatrolPoint = (this.nextPatrolPoint + 1) % patrolPoints.length;
+                this.patrolDelayTicksRemaining = -1;
+                dest = CoordGrid.unpackCoord(patrolPoints[this.nextPatrolPoint]);
+                this.queueWaypoint(dest.x, dest.z);
+            }
+        }
+
+        this.updateMovement();
     }
 
     private playerEscapeMode(): void {
@@ -760,48 +791,86 @@ export default class Npc extends PathingEntity {
         }
 
         let direction: number;
-        let flags: number;
         if (this.target.x >= this.x && this.target.z >= this.z) {
             direction = Direction.SOUTH_WEST;
-            flags = CollisionFlag.WALL_SOUTH | CollisionFlag.WALL_WEST;
         } else if (this.target.x >= this.x && this.target.z < this.z) {
             direction = Direction.NORTH_WEST;
-            flags = CollisionFlag.WALL_NORTH | CollisionFlag.WALL_WEST;
         } else if (this.target.x < this.x && this.target.z >= this.z) {
             direction = Direction.SOUTH_EAST;
-            flags = CollisionFlag.WALL_SOUTH | CollisionFlag.WALL_EAST;
         } else {
             direction = Direction.NORTH_EAST;
-            flags = CollisionFlag.WALL_NORTH | CollisionFlag.WALL_EAST;
         }
 
+        const dx: number = CoordGrid.deltaX(direction);
+        const dz: number = CoordGrid.deltaZ(direction);
         const mx: number = CoordGrid.moveX(this.x, direction);
         const mz: number = CoordGrid.moveZ(this.z, direction);
-
-        if (isFlagged(mx, mz, this.level, flags)) {
-            this.resetDefaults();
-            return;
-        }
-
         const coord: CoordGrid = { x: mx, z: mz, level: this.level };
-        if (
-            CoordGrid.distanceToSW(coord, {
-                x: this.startX,
-                z: this.startZ
-            }) < NpcType.get(this.type).maxrange
-        ) {
+        const maxRange: number = NpcType.get(this.type).maxrange;
+
+        const collisionStrategy: CollisionType = this.getCollisionStrategy() ?? CollisionType.NORMAL;
+        const extraFlag: CollisionFlag = this.blockWalkFlag();
+
+        const diagonalTravelValid: boolean = canTravel(this.level, this.x, this.z, dx, dz, this.width, extraFlag, collisionStrategy);
+        const diagonalStepValid: boolean = diagonalTravelValid && CoordGrid.distanceToSW(coord, { x: this.startX, z: this.startZ }) <= maxRange;
+
+        if (diagonalStepValid) {
             this.queueWaypoint(coord.x, coord.z);
-            this.updateMovement();
-            return;
+        } else {
+            let primaryCoord: CoordGrid;
+            let secondaryCoord: CoordGrid;
+            let primaryTravelValid: boolean;
+            let secondaryTravelValid: boolean;
+
+            if (direction === Direction.SOUTH_WEST) {
+                // Prefer West over South
+                primaryCoord = { x: mx, z: this.z, level: this.level };
+                secondaryCoord = { x: this.x, z: mz, level: this.level };
+                primaryTravelValid = canTravel(this.level, this.x, this.z, dx, 0, this.width, extraFlag, collisionStrategy);
+                secondaryTravelValid = canTravel(this.level, this.x, this.z, 0, dz, this.width, extraFlag, collisionStrategy);
+            } else if (direction === Direction.NORTH_EAST) {
+                // Prefer East over North
+                primaryCoord = { x: mx, z: this.z, level: this.level };
+                secondaryCoord = { x: this.x, z: mz, level: this.level };
+                primaryTravelValid = canTravel(this.level, this.x, this.z, dx, 0, this.width, extraFlag, collisionStrategy);
+                secondaryTravelValid = canTravel(this.level, this.x, this.z, 0, dz, this.width, extraFlag, collisionStrategy);
+            } else if (direction === Direction.NORTH_WEST) {
+                // Prefer West over North
+                primaryCoord = { x: mx, z: this.z, level: this.level };
+                secondaryCoord = { x: this.x, z: mz, level: this.level };
+                primaryTravelValid = canTravel(this.level, this.x, this.z, dx, 0, this.width, extraFlag, collisionStrategy);
+                secondaryTravelValid = canTravel(this.level, this.x, this.z, 0, dz, this.width, extraFlag, collisionStrategy);
+            } else {
+                // Prefer East over South
+                primaryCoord = { x: mx, z: this.z, level: this.level };
+                secondaryCoord = { x: this.x, z: mz, level: this.level };
+                primaryTravelValid = canTravel(this.level, this.x, this.z, dx, 0, this.width, extraFlag, collisionStrategy);
+                secondaryTravelValid = canTravel(this.level, this.x, this.z, 0, dz, this.width, extraFlag, collisionStrategy);
+            }
+
+            const primaryValid = primaryTravelValid && CoordGrid.distanceToSW(primaryCoord, { x: this.startX, z: this.startZ }) <= maxRange;
+            const secondaryValid = secondaryTravelValid && CoordGrid.distanceToSW(secondaryCoord, { x: this.startX, z: this.startZ }) <= maxRange;
+
+            if (primaryValid) {
+                this.queueWaypoint(primaryCoord.x, primaryCoord.z);
+            } else if (secondaryValid) {
+                this.queueWaypoint(secondaryCoord.x, secondaryCoord.z);
+            }
         }
 
-        // walk along other axis.
-        if (direction === Direction.NORTH_EAST || direction === Direction.NORTH_WEST) {
-            this.queueWaypoint(this.x, coord.z);
-        } else {
-            this.queueWaypoint(coord.x, this.z);
+        if (!this.updateMovement()) {
+            this.stuckCounter++;
         }
-        this.updateMovement();
+
+        const distX: number = CoordGrid.distanceToSW({ x: this.x, z: this.startZ }, { x: this.startX, z: this.startZ });
+        const distZ: number = CoordGrid.distanceToSW({ x: this.startX, z: this.z }, { x: this.startX, z: this.startZ });
+        const atMaxRangeBoth: boolean = distX >= maxRange && distZ >= maxRange;
+
+        // Resets if it has been stuck for 5 ticks and is not at max range in both directions
+        if (this.stuckCounter >= 5 && !atMaxRangeBoth) {
+            this.resetDefaults();
+            this.stuckCounter = 0;
+        }
     }
 
     private playerFollowMode(): void {
@@ -838,8 +907,8 @@ export default class Npc extends PathingEntity {
     private aiMode(): void {
         const type: NpcType = NpcType.get(this.type);
 
-        // Reset the wander timer if Npc runs its aimode
-        this.wanderCounter = 0;
+        // Reset the stuck timer if Npc runs its aimode
+        this.stuckCounter = 0;
 
         // Try to interact before moving, include op Obj and Loc
         if (this.tryInteract(true)) {
@@ -968,6 +1037,8 @@ export default class Npc extends PathingEntity {
                     quantity = player.invTotal(hunt.checkInv, hunt.checkObj);
                 } else if (hunt.checkObjParam !== -1) {
                     quantity = player.invTotalParam(hunt.checkInv, hunt.checkObjParam);
+                } else if (hunt.checkObjCat !== -1) {
+                    quantity = player.invTotalCat(hunt.checkInv, hunt.checkObjCat);
                 }
                 if (!hunt.checkHuntCondition(quantity, hunt.checkInvCondition, hunt.checkInvVal)) {
                     continue;

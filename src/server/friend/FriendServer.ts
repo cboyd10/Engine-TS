@@ -31,7 +31,7 @@ export const enum FriendsClientOpcodes {
     RELAY_RELOAD,
     RELAY_CLEARLOGINS,
     RELAY_CLEARLOGOUTS,
-    RELAY_QUEUESCRIPT,
+    RELAY_QUEUESCRIPT
 }
 
 /**
@@ -50,7 +50,7 @@ export const enum FriendsServerOpcodes {
     RELAY_RELOAD,
     RELAY_CLEARLOGINS,
     RELAY_CLEARLOGOUTS,
-    RELAY_QUEUESCRIPT,
+    RELAY_QUEUESCRIPT
 }
 
 // TODO make this configurable (or at least source it from somewhere common)
@@ -61,7 +61,7 @@ const WORLD_PLAYER_LIMIT = 2000;
  */
 export class FriendServer {
     private server: WebSocketServer;
-    
+
     private profile: string = Environment.NODE_PROFILE;
     private repository: FriendServerRepository = new FriendServerRepository(this.profile);
 

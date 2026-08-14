@@ -1,6 +1,5 @@
 import fs from 'fs';
 
-
 import { ConfigType } from '#/cache/config/ConfigType.js';
 import Jagfile from '#/io/Jagfile.js';
 import Packet from '#/io/Packet.js';
@@ -79,14 +78,15 @@ export default class FloType extends ConfigType {
 
     // ----
 
-    rgb: number = 0;
+    colour: number = 0;
     texture: number = -1;
     overlay: boolean = false;
     occlude: boolean = true;
+    mapcolour: number = 0;
 
     decode(code: number, dat: Packet): void {
         if (code === 1) {
-            this.rgb = dat.g3();
+            this.colour = dat.g3();
         } else if (code === 2) {
             this.texture = dat.g1();
         } else if (code === 3) {
@@ -95,6 +95,8 @@ export default class FloType extends ConfigType {
             this.occlude = false;
         } else if (code === 6) {
             this.debugname = dat.gjstr();
+        } else if (code === 7) {
+            this.mapcolour = dat.g3();
         } else {
             throw new Error(`Unrecognized flo config code: ${code}`);
         }

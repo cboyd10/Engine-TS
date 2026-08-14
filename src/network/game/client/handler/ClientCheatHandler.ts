@@ -1,7 +1,7 @@
 import v8 from 'node:v8';
 
-import { Visibility } from '@2004scape/rsbuf';
-import { LocAngle, LocShape } from '@2004scape/rsmod-pathfinder';
+import { Visibility } from '#/network/rsbuf/index.js';
+import { LocAngle, LocShape } from '#/engine/routefinder/index.js';
 
 import Component from '#/cache/config/Component.js';
 import IdkType from '#/cache/config/IdkType.js';
@@ -140,7 +140,6 @@ export default class ClientCheatHandler extends ClientGameMessageHandler<ClientC
                             }
                         }
                     } catch (_) {
-                         
                         // invalid arguments
                         return false;
                     }
@@ -352,7 +351,7 @@ export default class ClientCheatHandler extends ClientGameMessageHandler<ClientC
                 }
 
                 const count = Math.max(1, Math.min(tryParseInt(args[1], 1), 0x7fffffff));
-                player.invAdd(InvType.INV, obj, count, false);
+                player.invAdd(InvType.INV, obj, count);
             } else if (cmd === 'giveother' && Environment.NODE_PRODUCTION) {
                 // custom
                 if (args.length < 2) {
@@ -372,7 +371,7 @@ export default class ClientCheatHandler extends ClientGameMessageHandler<ClientC
                 }
 
                 const count = Math.max(1, Math.min(tryParseInt(args[2], 1), 0x7fffffff));
-                other.invAdd(InvType.INV, obj, count, false);
+                other.invAdd(InvType.INV, obj, count);
             } else if (cmd === 'givecrap') {
                 // authentic (we don't know the exact specifics of this...)
 
@@ -387,7 +386,7 @@ export default class ClientCheatHandler extends ClientGameMessageHandler<ClientC
                         }
                     }
 
-                    player.invAdd(InvType.INV, random, 1, false);
+                    player.invAdd(InvType.INV, random, 1);
                 }
             } else if (cmd === 'givemany') {
                 // authentic
@@ -402,7 +401,7 @@ export default class ClientCheatHandler extends ClientGameMessageHandler<ClientC
                     return false;
                 }
 
-                player.invAdd(InvType.INV, obj, 1000, false);
+                player.invAdd(InvType.INV, obj, 1000);
             } else if (cmd === 'broadcast' && Environment.NODE_PRODUCTION) {
                 // custom
                 if (args.length < 0) {
@@ -423,7 +422,7 @@ export default class ClientCheatHandler extends ClientGameMessageHandler<ClientC
                     return false;
                 }
 
-                World.rebootTimer(Math.ceil(tryParseInt(args[0], 30) * 1000 / 600));
+                World.rebootTimer(Math.ceil((tryParseInt(args[0], 30) * 1000) / 600));
             } else if (cmd === 'serverdrop') {
                 // testing reconnection behavior
                 player.terminate();
@@ -513,7 +512,7 @@ export default class ClientCheatHandler extends ClientGameMessageHandler<ClientC
                 if (!type) {
                     return false;
                 }
-                World.addNpc(new Npc(player.level, player.x, player.z, type.size, type.size, EntityLifeCycle.DESPAWN, World.getNextNid(), type.id, type.moverestrict, type.blockwalk), 500);
+                World.addNpc(new Npc(player.level, player.x, player.z, type.size, type.size, EntityLifeCycle.DESPAWN, World.getNextNid(), type.id, type.blockwalk), 500);
             } else if (cmd === 'openmain') {
                 if (args.length < 1) {
                     return false;

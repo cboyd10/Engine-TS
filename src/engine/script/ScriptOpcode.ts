@@ -52,15 +52,17 @@ export const enum ScriptOpcode {
     MAP_INDOORS,
     MAP_LIVE,
     MAP_LOCADDUNSAFE, // official
+    MAP_LOC,
     MAP_MEMBERS, // official
     MAP_MULTIWAY, // official
     MAP_PLAYERCOUNT, // official, see giant dwarf cutscene
     MOVECOORD, // official
     PLAYERCOUNT,
-    PROJANIM_MAP,
+    PROJANIM_MAP, // official
     SEQLENGTH, // official
     SPOTANIM_MAP,
     WORLD_DELAY, // official
+    MIDI_LENGTH,
 
     // Player ops (2000-2499)
     AFK_EVENT = 2000,
@@ -112,7 +114,7 @@ export const enum ScriptOpcode {
     IF_SETOBJECT, // official
     IF_SETPLAYERHEAD, // official
     IF_SETPOSITION, // official
-    IF_SETRESUMEBUTTONS,
+    IF_ADDRESUMEBUTTON,
     IF_SETROTATION,
     IF_SETSCROLLPOS, // official
     IF_SETTAB,
@@ -154,13 +156,14 @@ export const enum ScriptOpcode {
     P_PAUSEBUTTON, // official
     P_PREVENTLOGOUT,
     P_RUN, // todo: real command name?
+    P_TEMPRUN, // todo: real command name?
     P_STOPACTION, // official
     P_TELEJUMP, // official
     P_TELEPORT,
-    P_TRANSMOGRIFY,
+    P_TRANSMOGRIFY, // official
     P_WALK, // official
     PLAYERMEMBER, // official
-    PROJANIM_PL, // todo: take active_player
+    PROJANIM_PL, // official
     QUEUE, // official
     QUEUEVARARG,
     READYANIM,
@@ -172,7 +175,7 @@ export const enum ScriptOpcode {
     SETGENDER,
     SETIDKIT,
     SET_SKILL_LEVEL,
-    SETSKINCOLOUR,
+    SETIDKCOLOUR,
     SETTIMER,
     SOFTTIMER, // official
     SOUND_SYNTH, // official, newspost
@@ -234,6 +237,7 @@ export const enum ScriptOpcode {
     NPC_HUNT,
     NPC_HUNTALL, // official
     NPC_INRANGE,
+    NPC_DESTINATION, // official
     NPC_NAME,
     NPC_PARAM, // official
     NPC_QUEUE, // official
@@ -253,7 +257,7 @@ export const enum ScriptOpcode {
     NPC_UID,
     NPC_WALK,
     NPC_WALKTRIGGER, // official
-    PROJANIM_NPC, // todo: take active_npc
+    PROJANIM_NPC, // official
     SPOTANIM_NPC,
 
     // Loc ops (3000-3499)
@@ -274,7 +278,7 @@ export const enum ScriptOpcode {
 
     // Obj ops (3500-4000)
     OBJ_ADD = 3500, // official
-    OBJ_ADDALL,
+    OBJ_ADDALL, // official
     OBJ_COORD,
     OBJ_COUNT,
     OBJ_DEL,
@@ -283,7 +287,7 @@ export const enum ScriptOpcode {
     OBJ_FINDNEXT,
     OBJ_NAME,
     OBJ_PARAM,
-    OBJ_TAKEITEM,
+    OBJ_TAKEITEM, // official
     OBJ_TYPE,
 
     // Npc config ops (4000-4099)
@@ -334,17 +338,17 @@ export const enum ScriptOpcode {
     INV_CLEAR,
     INV_DEBUGNAME,
     INV_DEL, // official
-    INV_DELSLOT,
-    INV_DROPALL,
+    INV_DELSLOT, // official
+    INV_DROPALL, // official
     INV_DROPITEM_DELAYED,
-    INV_DROPITEM,
-    INV_DROPSLOT,
+    INV_DROPITEM, // official
+    INV_DROPSLOT, // official
     INV_FREESPACE,
     INV_GETNUM,
     INV_GETOBJ, // official
     INV_ITEMSPACE,
     INV_ITEMSPACE2, // official
-    INV_MOVEFROMSLOT,
+    INV_MOVEFROMSLOT, // official
     INV_MOVEITEM_CERT, // official
     INV_MOVEITEM_UNCERT, // official
     INV_MOVEITEM, // official
@@ -430,7 +434,6 @@ export const enum ScriptOpcode {
     DATE_MINUTES, // derived
     DATE_RUNEDAY, // derived
 
-
     // Struct ops (4700-4799)
     STRUCT_PARAM = 4700,
 
@@ -451,7 +454,7 @@ export const enum ScriptOpcode {
     CONSOLE = 10000,
     ERROR,
     GETTIMESPENT, // custom: used to profile script execution (current duration)
-    TIMESPENT, // custom: used to profile script execution (record start time)
+    TIMESPENT // custom: used to profile script execution (record start time)
 }
 
 export const ScriptOpcodeMap: Map<string, number> = new Map([
@@ -506,6 +509,7 @@ export const ScriptOpcodeMap: Map<string, number> = new Map([
     ['MAP_INDOORS', ScriptOpcode.MAP_INDOORS],
     ['MAP_LIVE', ScriptOpcode.MAP_LIVE],
     ['MAP_LOCADDUNSAFE', ScriptOpcode.MAP_LOCADDUNSAFE],
+    ['MAP_LOC', ScriptOpcode.MAP_LOC],
     ['MAP_MEMBERS', ScriptOpcode.MAP_MEMBERS],
     ['MAP_MULTIWAY', ScriptOpcode.MAP_MULTIWAY],
     ['MAP_PLAYERCOUNT', ScriptOpcode.MAP_PLAYERCOUNT],
@@ -515,6 +519,7 @@ export const ScriptOpcodeMap: Map<string, number> = new Map([
     ['SEQLENGTH', ScriptOpcode.SEQLENGTH],
     ['SPOTANIM_MAP', ScriptOpcode.SPOTANIM_MAP],
     ['WORLD_DELAY', ScriptOpcode.WORLD_DELAY],
+    ['MIDI_LENGTH', ScriptOpcode.MIDI_LENGTH],
 
     ['AFK_EVENT', ScriptOpcode.AFK_EVENT],
     ['ALLOWDESIGN', ScriptOpcode.ALLOWDESIGN],
@@ -566,7 +571,7 @@ export const ScriptOpcodeMap: Map<string, number> = new Map([
     ['IF_SETOBJECT', ScriptOpcode.IF_SETOBJECT],
     ['IF_SETPLAYERHEAD', ScriptOpcode.IF_SETPLAYERHEAD],
     ['IF_SETPOSITION', ScriptOpcode.IF_SETPOSITION],
-    ['IF_SETRESUMEBUTTONS', ScriptOpcode.IF_SETRESUMEBUTTONS],
+    ['IF_ADDRESUMEBUTTON', ScriptOpcode.IF_ADDRESUMEBUTTON],
     ['IF_SETSCROLLPOS', ScriptOpcode.IF_SETSCROLLPOS],
     ['IF_SETTAB', ScriptOpcode.IF_SETTAB],
     ['IF_SETTABACTIVE', ScriptOpcode.IF_SETTABACTIVE],
@@ -607,6 +612,7 @@ export const ScriptOpcodeMap: Map<string, number> = new Map([
     ['P_PAUSEBUTTON', ScriptOpcode.P_PAUSEBUTTON],
     ['P_PREVENTLOGOUT', ScriptOpcode.P_PREVENTLOGOUT],
     ['P_RUN', ScriptOpcode.P_RUN],
+    ['P_TEMPRUN', ScriptOpcode.P_TEMPRUN],
     ['P_STOPACTION', ScriptOpcode.P_STOPACTION],
     ['P_TELEJUMP', ScriptOpcode.P_TELEJUMP],
     ['P_TELEPORT', ScriptOpcode.P_TELEPORT],
@@ -626,7 +632,7 @@ export const ScriptOpcodeMap: Map<string, number> = new Map([
     ['SETGENDER', ScriptOpcode.SETGENDER],
     ['SETIDKIT', ScriptOpcode.SETIDKIT],
     ['SET_SKILL_LEVEL', ScriptOpcode.SET_SKILL_LEVEL],
-    ['SETSKINCOLOUR', ScriptOpcode.SETSKINCOLOUR],
+    ['SETIDKCOLOUR', ScriptOpcode.SETIDKCOLOUR],
     ['SETTIMER', ScriptOpcode.SETTIMER],
     ['SOFTTIMER', ScriptOpcode.SOFTTIMER],
     ['SOUND_SYNTH', ScriptOpcode.SOUND_SYNTH],
@@ -692,6 +698,7 @@ export const ScriptOpcodeMap: Map<string, number> = new Map([
     ['NPC_HUNT', ScriptOpcode.NPC_HUNT],
     ['NPC_HUNTALL', ScriptOpcode.NPC_HUNTALL],
     ['NPC_INRANGE', ScriptOpcode.NPC_INRANGE],
+    ['NPC_DESTINATION', ScriptOpcode.NPC_DESTINATION],
     ['NPC_NAME', ScriptOpcode.NPC_NAME],
     ['NPC_PARAM', ScriptOpcode.NPC_PARAM],
     ['NPC_QUEUE', ScriptOpcode.NPC_QUEUE],
@@ -876,9 +883,7 @@ export const ScriptOpcodeMap: Map<string, number> = new Map([
     ['CONSOLE', ScriptOpcode.CONSOLE],
     ['ERROR', ScriptOpcode.ERROR],
     ['GETTIMESPENT', ScriptOpcode.GETTIMESPENT],
-    ['TIMESPENT', ScriptOpcode.TIMESPENT],
+    ['TIMESPENT', ScriptOpcode.TIMESPENT]
 ]);
 
-export const ScriptOpcodeNameMap: Map<number, string> = new Map(
-    Array.from(ScriptOpcodeMap.entries()).map(([key, value]) => [value, key])
-);
+export const ScriptOpcodeNameMap: Map<number, string> = new Map(Array.from(ScriptOpcodeMap.entries()).map(([key, value]) => [value, key]));

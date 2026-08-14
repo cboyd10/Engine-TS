@@ -1,7 +1,8 @@
 import fs from 'fs';
 
-import { CollisionFlag, CollisionType, LocAngle, LocLayer } from '@2004scape/rsmod-pathfinder';
-import * as rsmod from '@2004scape/rsmod-pathfinder';
+import { unzipSync } from 'fflate';
+
+import rsmod, { CollisionFlag, CollisionType, LocAngle, LocLayer } from '#/engine/routefinder/index.js';
 
 import LocType from '#/cache/config/LocType.js';
 import NpcType from '#/cache/config/NpcType.js';
@@ -18,6 +19,8 @@ import ZoneMap from '#/engine/zone/ZoneMap.js';
 import Packet from '#/io/Packet.js';
 import Environment from '#/util/Environment.js';
 import { printDebug, printFatalError, printWarning } from '#/util/Logger.js';
+
+export type RouteCoordinates = { x: number; z: number };
 
 export default class GameMap {
     private static readonly OPEN: number = 0x0;
@@ -60,22 +63,40 @@ export default class GameMap {
             this.loadCsvMap(this.freemap, fs.readFileSync(`${Environment.BUILD_SRC_DIR}/maps/free2play.csv`, 'ascii').split(/\r?\n/));
         }
 
-        const path: string = 'data/pack/server/maps/';
-        const maps: string[] = fs.readdirSync(path).filter(x => x[0] === 'm');
-        for (let index: number = 0; index < maps.length; index++) {
-            const [mx, mz] = maps[index].substring(1).split('_').map(Number);
-            const mapsquareX: number = mx << 6;
-            const mapsquareZ: number = mz << 6;
+        const zipPath = 'data/pack/.cache/maps-server.zip';
+        if (fs.existsSync(zipPath)) {
+            const mapEntries = unzipSync(fs.readFileSync(zipPath));
+            const maps: string[] = Object.keys(mapEntries).filter(name => name[0] === 'm');
+            for (let index: number = 0; index < maps.length; index++) {
+                const [mx, mz] = maps[index].substring(1).split('_').map(Number);
+                const mapsquareX: number = mx << 6;
+                const mapsquareZ: number = mz << 6;
 
-            this.loadNpcs(Packet.load(`${path}n${mx}_${mz}`), mapsquareX, mapsquareZ);
-            this.loadObjs(Packet.load(`${path}o${mx}_${mz}`), mapsquareX, mapsquareZ);
-            // collision
-            const lands: Int8Array = new Int8Array(GameMap.MAPSQUARE); // 4 * 64 * 64 size is guaranteed for lands
-            this.loadGround(lands, Packet.load(`${path}m${mx}_${mz}`), mapsquareX, mapsquareZ);
-            this.loadLocations(lands, Packet.load(`${path}l${mx}_${mz}`), mapsquareX, mapsquareZ);
+                this.loadNpcs(new Packet(mapEntries[`n${mx}_${mz}`] ?? new Uint8Array()), mapsquareX, mapsquareZ);
+                this.loadObjs(new Packet(mapEntries[`o${mx}_${mz}`] ?? new Uint8Array()), mapsquareX, mapsquareZ);
+                // collision
+                const lands: Int8Array = new Int8Array(GameMap.MAPSQUARE); // 4 * 64 * 64 size is guaranteed for lands
+                this.loadGround(lands, new Packet(mapEntries[`m${mx}_${mz}`]), mapsquareX, mapsquareZ);
+                this.loadLocations(lands, new Packet(mapEntries[`l${mx}_${mz}`]), mapsquareX, mapsquareZ);
+            }
+        } else {
+            const path: string = 'data/pack/server/maps/';
+            const maps: string[] = fs.readdirSync(path).filter(x => x[0] === 'm');
+            for (let index: number = 0; index < maps.length; index++) {
+                const [mx, mz] = maps[index].substring(1).split('_').map(Number);
+                const mapsquareX: number = mx << 6;
+                const mapsquareZ: number = mz << 6;
+
+                this.loadNpcs(Packet.load(`${path}n${mx}_${mz}`), mapsquareX, mapsquareZ);
+                this.loadObjs(Packet.load(`${path}o${mx}_${mz}`), mapsquareX, mapsquareZ);
+                // collision
+                const lands: Int8Array = new Int8Array(GameMap.MAPSQUARE); // 4 * 64 * 64 size is guaranteed for lands
+                this.loadGround(lands, Packet.load(`${path}m${mx}_${mz}`), mapsquareX, mapsquareZ);
+                this.loadLocations(lands, Packet.load(`${path}l${mx}_${mz}`), mapsquareX, mapsquareZ);
+            }
         }
 
-        printDebug(`${World.getTotalNpcs()}/${Environment.NODE_MAX_NPCS} static NPCs added`);
+        printDebug(`${World.getTotalNpcs()}/16383 static NPCs added`);
     }
 
     isMulti(coord: number): boolean {
@@ -129,7 +150,7 @@ export default class GameMap {
                 }
                 if ((npcType.members && this.members) || !npcType.members) {
                     const size: number = npcType.size;
-                    const npc: Npc = new Npc(level, absoluteX, absoluteZ, size, size, EntityLifeCycle.RESPAWN, World.getNextNid(), npcType.id, npcType.moverestrict, npcType.blockwalk);
+                    const npc: Npc = new Npc(level, absoluteX, absoluteZ, size, size, EntityLifeCycle.RESPAWN, World.getNextNid(), npcType.id, npcType.blockwalk);
                     World.addNpc(npc, -1);
                 }
             }
@@ -260,7 +281,9 @@ export default class GameMap {
                     changeLocCollision(shape, angle, type.blockrange, length, width, type.active, absoluteX, absoluteZ, actualLevel, true);
                 }
 
-                this.getZone(absoluteX, absoluteZ, actualLevel).addStaticLoc(new Loc(actualLevel, absoluteX, absoluteZ, width, length, EntityLifeCycle.RESPAWN, locId, shape, angle));
+                if (type.active) {
+                    this.getZone(absoluteX, absoluteZ, actualLevel).addStaticLoc(new Loc(actualLevel, absoluteX, absoluteZ, width, length, EntityLifeCycle.RESPAWN, locId, shape, angle));
+                }
             }
             locIdOffset = packet.gsmarts();
         }
@@ -326,18 +349,21 @@ export function changeLandCollision(x: number, z: number, level: number, add: bo
 export function changeLocCollision(shape: number, angle: number, blockrange: boolean, length: number, width: number, active: number, x: number, z: number, level: number, add: boolean): void {
     const locLayer: LocLayer = rsmod.locShapeLayer(shape);
     if (locLayer === LocLayer.WALL) {
-        rsmod.changeWall(x, z, level, angle, shape, blockrange, false, add);
+        rsmod.changeWall(x, z, level, angle, shape, blockrange, add);
     } else if (locLayer === LocLayer.GROUND) {
         if (angle === LocAngle.NORTH || angle === LocAngle.SOUTH) {
-            rsmod.changeLoc(x, z, level, length, width, blockrange, false, add);
+            rsmod.changeLoc(x, z, level, length, width, blockrange, add);
         } else {
-            rsmod.changeLoc(x, z, level, width, length, blockrange, false, add);
+            rsmod.changeLoc(x, z, level, width, length, blockrange, add);
         }
     } else if (locLayer === LocLayer.GROUND_DECOR) {
         if (active === 1) {
             rsmod.changeFloor(x, z, level, add);
         }
     }
+}
+export function findNaivePath(level: number, srcX: number, srcZ: number, destX: number, destZ: number, srcWidth: number, srcHeight: number, destWidth: number, destHeight: number, extraFlag: number, collision: CollisionType): Uint32Array {
+    return rsmod.findNaivePath(level, srcX, srcZ, destX, destZ, srcWidth, srcHeight, destWidth, destHeight, extraFlag, collision);
 }
 
 /**
@@ -360,8 +386,20 @@ export function changeNpcCollision(size: number, x: number, z: number, level: nu
  * @param level The level pos.
  * @param add True if adding this collision. False if removing.
  */
-export function changePlayerCollision(size: number, x: number, z: number, level: number, add: boolean): void {
-    rsmod.changePlayer(x, z, level, size, add);
+export function changeBlockCollision(size: number, x: number, z: number, level: number, add: boolean): void {
+    rsmod.changeBlock(x, z, level, size, add);
+}
+
+/**
+ * Change player-occupancy collision at a specified Position.
+ * @param size The size square of this entity. (1x1, 2x2, etc).
+ * @param x The x pos.
+ * @param z The z pos.
+ * @param level The level pos.
+ * @param add True if adding this collision. False if removing.
+ */
+export function changePlayerOccCollision(size: number, x: number, z: number, level: number, add: boolean): void {
+    rsmod.changePlayerOcc(x, z, level, size, add);
 }
 
 /**
@@ -385,10 +423,6 @@ export function findPathToEntity(level: number, srcX: number, srcZ: number, dest
 
 export function findPathToLoc(level: number, srcX: number, srcZ: number, destX: number, destZ: number, srcSize: number, destWidth: number, destHeight: number, angle: number, shape: number, blockAccessFlags: number): Uint32Array {
     return rsmod.findPath(level, srcX, srcZ, destX, destZ, srcSize, destWidth, destHeight, angle, shape, true, blockAccessFlags, 25, CollisionType.NORMAL);
-}
-
-export function findNaivePath(level: number, srcX: number, srcZ: number, destX: number, destZ: number, srcWidth: number, srcHeight: number, destWidth: number, destHeight: number, extraFlag: number, collision: CollisionType): Uint32Array {
-    return rsmod.findNaivePath(level, srcX, srcZ, destX, destZ, srcWidth, srcHeight, destWidth, destHeight, extraFlag, collision);
 }
 
 export function reachedEntity(level: number, srcX: number, srcZ: number, destX: number, destZ: number, destWidth: number, destHeight: number, srcSize: number): boolean {
@@ -431,7 +465,7 @@ export function isLineOfSight(level: number, srcX: number, srcZ: number, destX: 
 }
 
 export function isApproached(level: number, srcX: number, srcZ: number, destX: number, destZ: number, srcWidth: number, srcHeight: number, destWidth: number, destHeight: number): boolean {
-    return rsmod.hasLineOfSight(level, srcX, srcZ, destX, destZ, srcWidth, srcHeight, destWidth, destHeight, CollisionFlag.PLAYER);
+    return rsmod.hasLineOfSight(level, srcX, srcZ, destX, destZ, srcWidth, srcHeight, destWidth, destHeight, CollisionFlag.BLOCK_NPC_AND_PLAYERS);
 }
 
 export function layerForLocShape(shape: number): LocLayer {

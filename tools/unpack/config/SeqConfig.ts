@@ -65,7 +65,7 @@ export function unpackSeqConfig(config: ConfigIdx, id: number): string[] {
 
             def.push(`walkmerge=${labels.join(',')}`);
         } else if (code === 4) {
-            def.push('stretches=yes');
+            def.push('reachforward=yes');
         } else if (code === 5) {
             const priority = dat.g1();
             def.push(`priority=${priority}`);
@@ -121,7 +121,7 @@ export function unpackSeqConfig(config: ConfigIdx, id: number): string[] {
             } else if (duplicatebehavior === 2) {
                 op = 'reset_loop';
             }
-            def.push(`duplicatebehavior=${op}`);
+            def.push(`duplicatebehaviour=${op}`);
         } else if (code === 12) {
             const code12 = dat.g4s();
             def.push(`code12=${code12}`);

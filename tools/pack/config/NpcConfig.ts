@@ -25,11 +25,12 @@ export function parseNpcConfig(key: string, value: string): ConfigValue | null |
         'timer', 'respawnrate',
         'ambient', 'contrast',
         'headicon',
-        'turnspeed'
+        'turnspeed',
+        'regenrate'
     ];
     // prettier-ignore
     const booleanKeys = [
-        'hasalpha', 'minimap', 'members', 'givechase', 'alwaysontop',
+        'minimap', 'members', 'givechase', 'alwaysontop',
         'active'
     ];
 
@@ -300,11 +301,11 @@ export function packNpcConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
                 } else if (key.startsWith('model')) {
                     const index = parseInt(key.substring('model'.length)) - 1;
                     models[index] = value as number;
-                    modelFlags[value as number] |= 0x4;
+                    modelFlags[value as number] |= 0x2; // todo: use context from script compiler
                 } else if (key.match(/head\d+/)) {
                     const index = parseInt(key.substring('head'.length)) - 1;
                     heads[index] = value as number;
-                    modelFlags[value as number] |= 0x4;
+                    modelFlags[value as number] |= 0x2; // todo: use context from script compiler
                 } else if (key.startsWith('recol')) {
                     const index = parseInt(key.substring('recol'.length, key.length - 1)) - 1;
                     if (key.endsWith('s')) {
@@ -333,12 +334,14 @@ export function packNpcConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
                         client.p1(14);
                         client.p2(value as number);
                     }
-                } else if (key === 'hasalpha') {
-                    if (value === true) {
-                        client.p1(16);
-                    }
                 } else if (key === 'category') {
                     server.p1(18);
+                    server.p2(value as number);
+                } else if (key === 'wanderrange') {
+                    server.p1(26);
+                    server.p2(value as number);
+                } else if (key === 'maxrange') {
+                    server.p1(27);
                     server.p2(value as number);
                 } else if (key.startsWith('op')) {
                     const index = parseInt(key.substring('op'.length)) - 1;
@@ -423,12 +426,6 @@ export function packNpcConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
                         client.p1(107);
                         active = false;
                     }
-                } else if (key === 'wanderrange') {
-                    server.p1(200);
-                    server.p2(value as number);
-                } else if (key === 'maxrange') {
-                    server.p1(201);
-                    server.p2(value as number);
                 } else if (key === 'huntrange') {
                     server.p1(202);
                     server.p1(value as number);

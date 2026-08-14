@@ -3,8 +3,8 @@ import fs from 'fs';
 import { Worker } from 'worker_threads';
 
 // deps
-import * as rsbuf from '@2004scape/rsbuf';
-import { PlayerInfoProt } from '@2004scape/rsbuf';
+import * as rsbuf from '#/network/rsbuf/index.js';
+import { PlayerInfoProt } from '#/network/rsbuf/index.js';
 import kleur from 'kleur';
 import forge from 'node-forge';
 import { TTLCache } from '@isaacs/ttlcache';
@@ -51,7 +51,7 @@ import { EntityQueueState, PlayerQueueType } from '#/engine/entity/PlayerQueueRe
 import { PlayerStat } from '#/engine/entity/PlayerStat.js';
 import { SessionLog } from '#/engine/entity/tracking/SessionLog.js';
 import { WealthTransactionEvent, WealthEvent } from '#/engine/entity/tracking/WealthEvent.js';
-import GameMap, { changeLocCollision, changeNpcCollision, changePlayerCollision } from '#/engine/GameMap.js';
+import GameMap, { changeLocCollision, changeNpcCollision, changeBlockCollision, changePlayerOccCollision } from '#/engine/GameMap.js';
 import { Inventory } from '#/engine/Inventory.js';
 import ScriptPointer from '#/engine/script/ScriptPointer.js';
 import ScriptProvider from '#/engine/script/ScriptProvider.js';
@@ -93,14 +93,13 @@ import Environment from '#/util/Environment.js';
 import { fromBase37, toBase37, toSafeName } from '#/util/JString.js';
 import LinkList from '#/datastruct/LinkList.js';
 import { printDebug, printError, printInfo } from '#/util/Logger.js';
-import { WalkTriggerSetting } from '#/engine/entity/WalkTriggerSetting.js';
-
 import OnDemand from './OnDemand.js';
 import { ObjDelayedRequest } from './entity/ObjDelayedRequest.js';
 import DbTableIndex from '#/cache/config/DbTableIndex.js';
 import VarBitType from '#/cache/config/VarBitType.js';
 import FriendlistLoaded from '#/network/game/server/model/FriendlistLoaded.js';
 import HashTable from '#/datastruct/HashTable.js';
+import Midi from '#/cache/midi/Midi.js';
 
 const priv = forge.pki.privateKeyFromPem(fs.readFileSync('data/config/private.pem', 'ascii'));
 
@@ -129,8 +128,8 @@ class World {
     private static readonly AFK_CHANCE1: number = 1 / (120 / 5); // 1/24 - 4% chance every 5 mins: avg 1 event every 2 hrs
     private static readonly AFK_CHANCE2: number = 1 / (60 / 5); // 1/12 - 8% chance every 5 mins: avg 1 event every 1 hr while "aggro zone" hasn't changed
 
-    private static readonly TIMEOUT_NO_CONNECTION: number = Environment.NODE_DEBUG_SOCKET ? 60000 : 50; // 30s with no connection (16 ticks in osrs)
-    private static readonly TIMEOUT_NO_RESPONSE: number = Environment.NODE_DEBUG_SOCKET ? 60000 : 100; // 60s without any response
+    private static readonly TIMEOUT_NO_CONNECTION: number = 50; // 30s with no connection (16 ticks in osrs)
+    private static readonly TIMEOUT_NO_RESPONSE: number = 100; // 60s without any response
 
     // the game/zones map
     readonly gameMap: GameMap = new GameMap(Environment.NODE_MEMBERS);
@@ -205,6 +204,8 @@ class World {
     }
 
     reload(clearInvs: boolean = true): void {
+        OnDemand.reloadCache();
+
         VarPlayerType.load('data/pack');
         VarBitType.load('data/pack');
         ParamType.load('data/pack');
@@ -294,6 +295,7 @@ class World {
 
         FontType.load('data/pack');
         WordEnc.load('data/pack');
+        Midi.load();
 
         this.reload();
 
@@ -521,7 +523,6 @@ class World {
     }
 
     // - world queue
-    // - npc spawn scripts
     // - npc hunt
     private processWorld(): void {
         const start: number = Date.now();
@@ -568,17 +569,19 @@ class World {
                 console.error(err);
             }
         }
-        // - npc ai_spawn scripts
-        // - npc hunt players if not busy
-        for (const npc of this.npcs) {
-            // Check if npc is alive
-            if (npc.isActive) {
-                // Hunts will process even if the npc is delayed during this portion
-                if (npc.huntMode !== -1 && rsbuf.getNpcObservers(npc.nid) > 0) {
-                    const hunt = HuntType.get(npc.huntMode);
 
-                    if (hunt && hunt.type === HuntModeType.PLAYER) {
-                        npc.huntAll(hunt);
+        // - npc hunt players if not busy
+        if (this.getTotalPlayers() > 0) {
+            for (const npc of this.npcs) {
+                // Check if npc is alive
+                if (npc.isActive) {
+                    // Hunts will process even if the npc is delayed during this portion
+                    if (npc.huntMode !== -1 && rsbuf.getNpcObservers(npc.nid) > 0) {
+                        const hunt = HuntType.get(npc.huntMode);
+
+                        if (hunt && hunt.type === HuntModeType.PLAYER) {
+                            npc.huntAll(hunt);
+                        }
                     }
                 }
             }
@@ -608,35 +611,16 @@ class World {
                 player.processInputTracking();
 
                 if (isClientConnected(player) && player.decodeIn()) {
-                    const followingPlayer = player.targetOp === ServerTriggerType.APPLAYER3 || player.targetOp === ServerTriggerType.OPPLAYER3;
                     if (player.userPath.length > 0 || player.opcalled) {
                         if (player.delayed) {
                             player.unsetMapFlag();
                             continue;
                         }
 
-                        if ((!player.target || player.target instanceof Loc || player.target instanceof Obj) && player.faceEntity !== -1) {
-                            player.faceEntity = -1;
-                            player.masks |= player.entitymask;
-                        }
-
                         if (!player.busy() && player.opcalled) {
                             player.moveClickRequest = false;
                         } else {
                             player.moveClickRequest = true;
-                        }
-
-                        if (!followingPlayer && player.opcalled && (player.userPath.length === 0 || !Environment.NODE_CLIENT_ROUTEFINDER)) {
-                            player.pathToTarget();
-                            continue;
-                        }
-
-                        if (Environment.NODE_WALKTRIGGER_SETTING !== WalkTriggerSetting.PLAYERPACKET) {
-                            player.pathToMoveClick(player.userPath, !Environment.NODE_CLIENT_ROUTEFINDER);
-
-                            if (Environment.NODE_WALKTRIGGER_SETTING === WalkTriggerSetting.PLAYERSETUP && !player.opcalled && player.hasWaypoints()) {
-                                player.processWalktrigger();
-                            }
                         }
                     }
                 }
@@ -681,7 +665,7 @@ class World {
                 npc.turn();
             } catch (err) {
                 console.error(err);
-                this.removeNpc(npc, -1);
+                this.removeNpc(npc, 0);
             }
         }
         this.cycleStats[WorldStat.NPC] = Date.now() - start;
@@ -719,9 +703,16 @@ class World {
                 }
                 // - engine queue
                 player.processEngineQueue();
+                // Face the interaction target -- both halves, the same tick the op set the target (the op ran
+                // in processClientsIn) and before processInteraction can clear it: the FACE_ENTITY mask, plus
+                // the serverside faceAngle toward a pathing target (for new observers).
+                player.setFaceEntity();
+                player.reorientEntity();
                 // - interactions
                 // - movement
                 player.processInteraction();
+                // After movement: face a loc/obj target if we walked over and held still (needs stepsTaken).
+                player.reorient();
 
                 // - run energy
                 player.updateEnergy();
@@ -914,15 +905,24 @@ class World {
 
                 const remote = player.client.remoteAddress;
                 if (remote.indexOf('.') !== -1) {
-                    // IPv4 - last octet determines the bucket
+                    // IPv4
                     const octets = remote.split('.');
-                    const bucket = (parseInt(octets[0]) << 24) | (parseInt(octets[1]) << 16) | (parseInt(octets[2]) << 8) | parseInt(octets[3]);
+                    const bucket = ((parseInt(octets[0]) << 24) | (parseInt(octets[1]) << 16) | (parseInt(octets[2]) << 8) | parseInt(octets[3])) >>> 0;
                     this.playerLoop.add(BigInt(bucket), player);
                 } else if (remote.indexOf(':') !== -1) {
-                    // IPv6 - site prefix determines the bucket
-                    const hextets = remote.split(':');
-                    const bucket = parseInt(hextets[2], 16) % 256;
-                    this.playerLoop.add(BigInt(bucket), player);
+                    // IPv6
+                    const hextets = remote.split('%', 1)[0].split(':');
+                    let omitted = 8 - hextets.filter(Boolean).length;
+                    let key = 0n;
+                    for (const hextet of hextets) {
+                        if (hextet) {
+                            key = (key << 16n) | BigInt(parseInt(hextet, 16));
+                        } else if (omitted) {
+                            key <<= BigInt(omitted * 16);
+                            omitted = 0;
+                        }
+                    }
+                    this.playerLoop.add(key, player);
                 }
             } else {
                 // 127.0.0.1
@@ -988,9 +988,13 @@ class World {
     // - convert npc movements
     // - compute npc info
     private processInfo(): void {
+        if (this.getTotalPlayers() === 0) {
+            return;
+        }
+
         // TODO: benchmark this?
         for (const player of this.playerLoop.all()) {
-            player.reorient();
+            // facing (reorientEntity/reorient) runs in the player's turn (processPlayers), not here.
             player.buildArea.rebuildNormal(); // set origin before compute player is why this is above.
 
             const appearance = player.masks & PlayerInfoProt.APPEARANCE ? player.generateAppearance() : (player.appearanceBuf ?? player.generateAppearance());
@@ -1043,7 +1047,7 @@ class World {
         }
 
         for (const npc of this.npcs) {
-            npc.reorient();
+            // facing (reorientEntity/reorient) runs in Npc.turn(), not here.
             rsbuf.computeNpc(
                 npc.x,
                 npc.level,
@@ -1146,7 +1150,7 @@ class World {
                     continue;
                 }
 
-                inv.update = false;
+                inv.resetTracking();
             }
         }
 
@@ -1157,7 +1161,7 @@ class World {
 
         // - reset invs (world)
         for (const inv of this.invs) {
-            inv.update = false;
+            inv.resetTracking();
 
             // Increase or Decrease shop stock
             const invType = InvType.get(inv.type);
@@ -1173,13 +1177,13 @@ class World {
                 }
                 // Item stock is under min
                 if (item.count < invType.stockcount[index] && tick % invType.stockrate[index] === 0) {
-                    inv.add(item.id, 1, index, true, false, false);
+                    inv.add(item.id, 1, index);
                     inv.update = true;
                     continue;
                 }
                 // Item stock is over min
                 if (item.count > invType.stockcount[index] && tick % invType.stockrate[index] === 0) {
-                    inv.remove(item.id, 1, index, true);
+                    inv.remove(item.id, 1, index);
                     inv.update = true;
                     continue;
                 }
@@ -1187,7 +1191,7 @@ class World {
                 // Item stock is not listed, such as general stores
                 // Tested on low and high player count worlds, ever 1 minute stock decreases.
                 if (invType.allstock && !invType.stockcount[index] && tick % World.INV_STOCKRATE === 0) {
-                    inv.remove(item.id, 1, index, true);
+                    inv.remove(item.id, 1, index);
                     inv.update = true;
                 }
             }
@@ -1277,7 +1281,7 @@ class World {
                 break;
             case BlockWalk.ALL:
                 changeNpcCollision(npc.width, npc.x, npc.z, npc.level, true);
-                changePlayerCollision(npc.width, npc.x, npc.z, npc.level, true);
+                changeBlockCollision(npc.width, npc.x, npc.z, npc.level, true);
                 break;
         }
 
@@ -1297,6 +1301,10 @@ class World {
     }
 
     removeNpc(npc: Npc, duration: number): void {
+        if (!npc.isActive) {
+            return;
+        }
+
         const zone = this.gameMap.getZone(npc.x, npc.z, npc.level);
         const adjustedDuration = this.scaleByPlayerCount(duration);
         zone.leave(npc);
@@ -1308,7 +1316,7 @@ class World {
                 break;
             case BlockWalk.ALL:
                 changeNpcCollision(npc.width, npc.x, npc.z, npc.level, false);
-                changePlayerCollision(npc.width, npc.x, npc.z, npc.level, false);
+                changeBlockCollision(npc.width, npc.x, npc.z, npc.level, false);
                 break;
         }
 
@@ -1602,6 +1610,7 @@ class World {
         delete this.players[player.slot];
         player.unlink();
         changeNpcCollision(player.width, player.x, player.z, player.level, false);
+        changePlayerOccCollision(player.width, player.x, player.z, player.level, false);
         player.cleanup();
 
         player.isActive = false;

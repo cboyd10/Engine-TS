@@ -103,6 +103,8 @@ const ScriptOpcodePointers: {
     [ScriptOpcode.FINDUID]: {
         set: ['active_player'],
         set2: ['active_player2'],
+        corrupt: ['p_active_player'],
+        corrupt2: ['p_active_player2'],
         conditional: true
     },
     [ScriptOpcode.GENDER]: {
@@ -219,7 +221,7 @@ const ScriptOpcodePointers: {
         require: ['active_player'],
         require2: ['active_player2']
     },
-    [ScriptOpcode.IF_SETRESUMEBUTTONS]: {
+    [ScriptOpcode.IF_ADDRESUMEBUTTON]: {
         require: ['active_player']
     },
     [ScriptOpcode.IF_SETTAB]: {
@@ -502,6 +504,8 @@ const ScriptOpcodePointers: {
         require2: ['active_player2']
     },
     [ScriptOpcode.FINDHERO]: {
+        require: ['active_player'],
+        require2: ['active_player2'],
         set: ['active_player2'],
         set2: ['active_player'],
         conditional: true
@@ -513,7 +517,7 @@ const ScriptOpcodePointers: {
     [ScriptOpcode.SETGENDER]: {
         require: ['p_active_player']
     },
-    [ScriptOpcode.SETSKINCOLOUR]: {
+    [ScriptOpcode.SETIDKCOLOUR]: {
         require: ['p_active_player']
     },
     [ScriptOpcode.P_ANIMPROTECT]: {
@@ -529,6 +533,10 @@ const ScriptOpcodePointers: {
         require2: ['p_active_player2']
     },
     [ScriptOpcode.P_RUN]: {
+        require: ['p_active_player'],
+        require2: ['p_active_player2']
+    },
+    [ScriptOpcode.P_TEMPRUN]: {
         require: ['p_active_player'],
         require2: ['p_active_player2']
     },
@@ -553,6 +561,18 @@ const ScriptOpcodePointers: {
     [ScriptOpcode.P_TRANSMOGRIFY]: {
         require: ['p_active_player'],
         require2: ['p_active_player2']
+    },
+    [ScriptOpcode.PLAYERMEMBER]: {
+        require: ['active_player']
+    },
+    [ScriptOpcode.STAT_TOTAL]: {
+        require: ['active_player']
+    },
+    [ScriptOpcode.SESSION_LOG]: {
+        require: ['active_player']
+    },
+    [ScriptOpcode.WEALTH_EVENT]: {
+        require: ['active_player']
     },
 
     // Npc ops
@@ -633,8 +653,9 @@ const ScriptOpcodePointers: {
     },
     [ScriptOpcode.NPC_FINDHERO]: {
         require: ['active_npc'],
+        require2: ['active_npc2'],
         set: ['active_player'],
-        set2: ['active_player'],
+        set2: ['active_player2'],
         conditional: true
     },
     [ScriptOpcode.NPC_FINDUID]: {
@@ -746,6 +767,10 @@ const ScriptOpcodePointers: {
         require: ['active_npc'],
         require2: ['active_npc2']
     },
+    [ScriptOpcode.NPC_DESTINATION]: {
+        require: ['active_npc'],
+        require2: ['active_npc2']
+    },
 
     // Loc ops
     [ScriptOpcode.LOC_ADD]: {
@@ -850,7 +875,8 @@ const ScriptOpcodePointers: {
     },
     [ScriptOpcode.OBJ_FIND]: {
         set: ['active_obj'],
-        set2: ['active_obj2']
+        set2: ['active_obj2'],
+        conditional: true
     },
     [ScriptOpcode.OBJ_FINDALLZONE]: {
         set: ['find_obj'],
@@ -1009,7 +1035,7 @@ const ScriptOpcodePointers: {
     },
     [ScriptOpcode.DB_LISTALL_WITH_COUNT]: {
         set: ['find_db']
-    },
+    }
 };
 
 export default ScriptOpcodePointers;

@@ -1,258 +1,229 @@
-import fs from 'fs';
-import http, { type IncomingHttpHeaders, type IncomingMessage, type ServerResponse } from 'http';
 import path from 'path';
-import { Readable } from 'stream';
-import type { ReadableStream as NodeReadableStream } from 'stream/web';
 
+import ejs from 'ejs';
+import Fastify from 'fastify';
+import FastifyStatic from '@fastify/static';
+import FastifyView from '@fastify/view';
+import FastifyWebsocket from '@fastify/websocket';
 import { register } from 'prom-client';
-import { WebSocketServer } from 'ws';
 
-import { CrcBuffer } from '#/cache/CrcTable.js';
-import World from '#/engine/World.js';
-import { LoggerEventType } from '#/server/logger/LoggerEventType.js';
-import NullClientSocket from '#/server/NullClientSocket.js';
-import WSClientSocket from '#/server/ws/WSClientSocket.js';
-import Environment from '#/util/Environment.js';
+import { CrcBuffer, CrcTable } from '#/cache/CrcTable.js';
+
 import OnDemand from '#/engine/OnDemand.js';
+import World from '#/engine/World.js';
 
-type NodeRequestInit = RequestInit & {
-    duplex?: 'half';
-};
+import NullClientSocket from '#/server/NullClientSocket.js';
 
-const MIME_TYPES = new Map<string, string>();
-MIME_TYPES.set('.js', 'application/javascript');
-MIME_TYPES.set('.mjs', 'application/javascript');
-MIME_TYPES.set('.css', 'text/css');
-MIME_TYPES.set('.html', 'text/html');
-MIME_TYPES.set('.wasm', 'application/wasm');
-MIME_TYPES.set('.sf2', 'application/octet-stream');
+import { LoggerEventType } from '#/server/logger/LoggerEventType.js';
 
-function getHeader(headers: Headers | IncomingHttpHeaders, name: string): string | null {
-    if (headers instanceof Headers) {
-        return headers.get(name);
-    }
+import WSClientSocket from '#/server/ws/WSClientSocket.js';
 
-    const value = headers[name.toLowerCase()];
-    if (Array.isArray(value)) {
-        return value[0] ?? null;
-    }
+import Environment from '#/util/Environment.js';
+import { tryParseInt } from '#/util/TryParse.js';
 
-    return value ?? null;
-}
+const fastify = Fastify({
+    // logger: true
+});
 
-function streamFile(filePath: string, contentType?: string): Response {
-    return new Response(Readable.toWeb(fs.createReadStream(filePath)) as ReadableStream, {
-        headers: {
-            'Content-Type': contentType ?? MIME_TYPES.get(path.extname(filePath)) ?? 'text/plain'
-        }
-    });
-}
+fastify.register(FastifyView, {
+    engine: {
+        ejs
+    },
+    root: 'view'
+});
 
-function fileExists(filePath: string): boolean {
-    try {
-        return fs.statSync(filePath).isFile();
-    } catch {
-        return false;
-    }
-}
+await fastify.register(FastifyWebsocket, {
+    options: {
+        maxPayload: 1600,
+        perMessageDeflate: false,
+        verifyClient: function (info, next) {
+            if (Environment.WEB_ALLOWED_ORIGIN && info.req.headers.origin !== Environment.WEB_ALLOWED_ORIGIN) {
+                next(false);
+                return;
+            }
 
-async function handleWebRequest(req: Request): Promise<Response> {
-    const url = new URL(req.url);
-
-    if (req.method === 'GET') {
-        if (url.pathname.startsWith('/crc')) {
-            return new Response(Buffer.from(CrcBuffer.data));
-        } else if (url.pathname.startsWith('/title')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 1)!));
-        } else if (url.pathname.startsWith('/config')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 2)!));
-        } else if (url.pathname.startsWith('/interface')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 3)!));
-        } else if (url.pathname.startsWith('/media')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 4)!));
-        } else if (url.pathname.startsWith('/versionlist')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 5)!));
-        } else if (url.pathname.startsWith('/textures')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 6)!));
-        } else if (url.pathname.startsWith('/wordenc')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 7)!));
-        } else if (url.pathname.startsWith('/sounds')) {
-            return new Response(Buffer.from(OnDemand.cache.read(0, 8)!));
-        }
-
-        const publicPath = `public${url.pathname}`;
-        if (fileExists(publicPath)) {
-            return streamFile(publicPath, MIME_TYPES.get(path.extname(url.pathname ?? '')) ?? 'text/plain');
+            next(true);
         }
     }
+});
 
-    return new Response(null, { status: 404 });
-}
+// general routes
 
-async function handleManagementRequest(req: Request): Promise<Response> {
-    const url = new URL(req.url);
+fastify.route({
+    method: 'GET',
+    url: '/',
+    handler: (_req, reply) => {
+        return reply.redirect('/rs2.cgi', 302);
+    },
+    wsHandler: (socket, req) => {
+        const client = new WSClientSocket(
+            {
+                send(data: Uint8Array) {
+                    socket.send(data);
+                },
+                close() {
+                    socket.close();
+                },
+                terminate() {
+                    socket.terminate();
+                }
+            },
+            req.socket.remoteAddress ?? 'unknown'
+        );
 
-    if (url.pathname === '/prometheus') {
-        return new Response(await register.metrics(), {
-            headers: {
-                'Content-Type': register.contentType
+        socket.on('message', (message: Buffer<ArrayBufferLike>) => {
+            try {
+                if (client.state === -1 || client.remaining <= 0) {
+                    client.terminate();
+                    return;
+                }
+
+                client.buffer(message);
+
+                if (client.state === 0) {
+                    World.onClientData(client);
+                } else if (client.state === 2) {
+                    OnDemand.onClientData(client);
+                }
+            } catch {
+                socket.terminate();
             }
         });
-    }
 
-    return new Response(null, { status: 404 });
-}
+        socket.on('close', () => {
+            client.state = -1;
+            OnDemand.onClientClosed(client);
 
-function createRequest(req: IncomingMessage, fallbackPort: number): Request {
-    const method = req.method ?? 'GET';
-    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? `localhost:${fallbackPort}`}`);
-    const headers = new Headers();
-
-    for (const [key, value] of Object.entries(req.headers)) {
-        if (typeof value === 'undefined') {
-            continue;
-        }
-
-        if (Array.isArray(value)) {
-            for (const item of value) {
-                headers.append(key, item);
+            if (client.player) {
+                client.player.addSessionLog(LoggerEventType.ENGINE, 'WS socket closed');
+                client.player.client = new NullClientSocket();
             }
-        } else {
-            headers.set(key, value);
-        }
+        });
+
+        socket.on('error', () => {
+            socket.terminate();
+        });
     }
+});
 
-    if (method === 'GET' || method === 'HEAD') {
-        return new Request(url, { method, headers });
-    }
+// cache routes
 
-    const init: NodeRequestInit = {
-        method,
-        headers,
-        body: Readable.toWeb(req) as ReadableStream,
-        duplex: 'half'
-    };
+fastify.get('/crc:cachebust', async (_req, reply) => {
+    reply.send(CrcBuffer.data);
+});
 
-    return new Request(url, init);
-}
+fastify.get<{ Params: { crc: string } }>('/title:crc', async (req, reply) => {
+    const { crc } = req.params;
 
-async function writeResponse(res: ServerResponse, response: Response): Promise<void> {
-    res.statusCode = response.status;
-    response.headers.forEach((value, key) => {
-        res.setHeader(key, value);
-    });
-
-    if (!response.body) {
-        res.end();
+    if (tryParseInt(crc, -1) !== CrcTable[1]) {
+        reply.status(404);
         return;
     }
 
-    await new Promise<void>((resolve, reject) => {
-        Readable.fromWeb(response.body as unknown as NodeReadableStream).pipe(res);
-        res.on('finish', resolve);
-        res.on('error', reject);
-    });
+    reply.send(OnDemand.cache.read(0, 1));
+});
+
+fastify.get<{ Params: { crc: string } }>('/config:crc', async (req, reply) => {
+    const { crc } = req.params;
+
+    if (tryParseInt(crc, -1) !== CrcTable[2]) {
+        reply.status(404);
+        return;
+    }
+
+    reply.send(OnDemand.cache.read(0, 2));
+});
+
+fastify.get<{ Params: { crc: string } }>('/interface:crc', async (req, reply) => {
+    const { crc } = req.params;
+
+    if (tryParseInt(crc, -1) !== CrcTable[3]) {
+        reply.status(404);
+        return;
+    }
+
+    reply.send(OnDemand.cache.read(0, 3));
+});
+
+fastify.get<{ Params: { crc: string } }>('/media:crc', async (req, reply) => {
+    const { crc } = req.params;
+
+    if (tryParseInt(crc, -1) !== CrcTable[4]) {
+        reply.status(404);
+        return;
+    }
+
+    reply.send(OnDemand.cache.read(0, 4));
+});
+
+fastify.get<{ Params: { crc: string } }>('/versionlist:crc', async (req, reply) => {
+    const { crc } = req.params;
+
+    if (tryParseInt(crc, -1) !== CrcTable[5]) {
+        reply.status(404);
+        return;
+    }
+
+    reply.send(OnDemand.cache.read(0, 5));
+});
+
+fastify.get<{ Params: { crc: string } }>('/textures:crc', async (req, reply) => {
+    const { crc } = req.params;
+
+    if (tryParseInt(crc, -1) !== CrcTable[6]) {
+        reply.status(404);
+        return;
+    }
+
+    reply.send(OnDemand.cache.read(0, 6));
+});
+
+fastify.get<{ Params: { crc: string } }>('/wordenc:crc', async (req, reply) => {
+    const { crc } = req.params;
+
+    if (tryParseInt(crc, -1) !== CrcTable[7]) {
+        reply.status(404);
+        return;
+    }
+
+    reply.send(OnDemand.cache.read(0, 7));
+});
+
+fastify.get<{ Params: { crc: string } }>('/sounds:crc', async (req, reply) => {
+    const { crc } = req.params;
+
+    if (tryParseInt(crc, -1) !== CrcTable[8]) {
+        reply.status(404);
+        return;
+    }
+
+    reply.send(OnDemand.cache.read(0, 8));
+});
+
+fastify.register(FastifyStatic, {
+    root: path.join(process.cwd(), 'public')
+});
+
+export async function startWeb() {
+    await fastify.listen({ port: Environment.WEB_PORT, host: '0.0.0.0' });
 }
 
-export async function startWeb(): Promise<void> {
-    const server = http.createServer(async (req, res) => {
-        try {
-            const response = await handleWebRequest(createRequest(req, Environment.WEB_PORT));
-            await writeResponse(res, response);
-        } catch (err) {
-            console.error(err);
-            res.statusCode = 500;
-            res.end();
-        }
-    });
+// management routes
 
-    const websocket = new WebSocketServer({
-        noServer: true,
-        maxPayload: 2000
-    });
+const management = Fastify();
 
-    server.on('upgrade', (req, socket, head) => {
-        const url = new URL(req.url ?? '/', `http://${req.headers.host ?? `localhost:${Environment.WEB_PORT}`}`);
-        if (url.pathname !== '/') {
-            socket.destroy();
-            return;
-        }
+management.register(FastifyView, {
+    engine: {
+        ejs
+    },
+    root: 'view'
+});
 
-        const origin = getHeader(req.headers, 'origin');
-        if (Environment.WEB_ALLOWED_ORIGIN && origin !== Environment.WEB_ALLOWED_ORIGIN) {
-            socket.destroy();
-            return;
-        }
+management.get('/prometheus', async (_req, reply) => {
+    reply.header('Content-Type', register.contentType);
+    return register.metrics();
+});
 
-        websocket.handleUpgrade(req, socket, head, ws => {
-            const client = new WSClientSocket();
-            client.init(
-                {
-                    send(data: Uint8Array) {
-                        ws.send(data);
-                    },
-                    close() {
-                        ws.close();
-                    },
-                    terminate() {
-                        ws.terminate();
-                    }
-                },
-                req.socket.remoteAddress ?? 'unknown'
-            );
-
-            ws.on('message', (message: Buffer<ArrayBufferLike>) => {
-                try {
-                    if (client.state === -1 || client.remaining <= 0) {
-                        client.terminate();
-                        return;
-                    }
-
-                    client.buffer(message);
-
-                    if (client.state === 0) {
-                        World.onClientData(client);
-                    } else if (client.state === 2) {
-                        OnDemand.onClientData(client);
-                    }
-                } catch (_) {
-                    ws.terminate();
-                }
-            });
-
-            ws.on('close', () => {
-                client.state = -1;
-
-                if (client.player) {
-                    client.player.addSessionLog(LoggerEventType.ENGINE, 'WS socket closed');
-                    client.player.client = new NullClientSocket();
-                }
-            });
-
-            ws.on('error', () => {
-                ws.terminate();
-            });
-        });
-    });
-
-    await new Promise<void>(resolve => {
-        server.listen(Environment.WEB_PORT, '0.0.0.0', () => resolve());
-    });
-}
-
-export async function startManagementWeb(): Promise<void> {
-    const server = http.createServer(async (req, res) => {
-        try {
-            const response = await handleManagementRequest(createRequest(req, Environment.WEB_MANAGEMENT_PORT));
-            await writeResponse(res, response);
-        } catch (err) {
-            console.error(err);
-            res.statusCode = 500;
-            res.end();
-        }
-    });
-
-    await new Promise<void>(resolve => {
-        server.listen(Environment.WEB_MANAGEMENT_PORT, '0.0.0.0', () => resolve());
-    });
+export async function startManagementWeb() {
+    await management.listen({ port: Environment.WEB_MANAGEMENT_PORT, host: '0.0.0.0' });
 }

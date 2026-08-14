@@ -14,9 +14,9 @@ for (let i = 0; i < floorcolCount && i < FloType.configs.length; i++) {
 
     const flo = FloType.get(i);
     if (flo.texture !== -1) {
-        console.log(`[0x${underlay}, 0x${overlay}], // debugname=${flo.debugname} overlay=${flo.overlay} occlude=${flo.occlude} rgb=0x${flo.rgb.toString(16).padStart(6, '0')} texture=${TexturePack.getById(flo.texture)}`);
+        console.log(`[0x${underlay}, 0x${overlay}], // debugname=${flo.debugname} overlay=${flo.overlay} occlude=${flo.occlude} rgb=0x${flo.colour.toString(16).padStart(6, '0')} texture=${TexturePack.getById(flo.texture)}`);
     } else {
-        console.log(`[0x${underlay}, 0x${overlay}], // debugname=${flo.debugname} overlay=${flo.overlay} occlude=${flo.occlude} rgb=0x${flo.rgb.toString(16).padStart(6, '0')}`);
+        console.log(`[0x${underlay}, 0x${overlay}], // debugname=${flo.debugname} overlay=${flo.overlay} occlude=${flo.occlude} rgb=0x${flo.colour.toString(16).padStart(6, '0')}`);
     }
 }
 

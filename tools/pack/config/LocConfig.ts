@@ -38,8 +38,8 @@ export function parseLocConfig(key: string, value: string): ConfigValue | null |
         'name', 'desc',
         'op1', 'op2', 'op3', 'op4', 'op5',
         // defer parsing to packing stage:
-        'model', 'model2', 'model3', 'model4',
-        'ldmodel', 'ldmodel2', 'ldmodel3', 'ldmodel4',
+        'model', 'model2', 'model3', 'model4', 'model5',
+        'ldmodel', 'ldmodel2', 'ldmodel3', 'ldmodel4', 'ldmodel5',
         'multivar', 'multiloc',
     ];
     // prettier-ignore
@@ -56,7 +56,6 @@ export function parseLocConfig(key: string, value: string): ConfigValue | null |
     const booleanKeys = [
         'blockwalk', 'blockrange',
         'active', 'hillskew', 'sharelight', 'occlude',
-        'hasalpha',
         'mirror', 'shadow',
         'forcedecor',
         'breakroutefinding', 'raiseobject'
@@ -253,10 +252,6 @@ export function packLocConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
                 } else if (key === 'anim') {
                     client.p1(24);
                     client.p2(value as number);
-                } else if (key === 'hasalpha') {
-                    if (value === true) {
-                        client.p1(25);
-                    }
                 } else if (key === 'wallwidth') {
                     client.p1(28);
                     client.p1(value as number);
@@ -324,7 +319,7 @@ export function packLocConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
                     if (varpId === -1) {
                         const varbitId = VarbitPack.getByName(value as string);
                         if (varbitId === -1) {
-                            throw new Error(`Unknown multivar: ${value}`);
+                            throw packStepError(debugname, `Unknown multivar: ${value}`);
                         }
 
                         multivarbit = varbitId;
@@ -335,7 +330,7 @@ export function packLocConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
                     const [index, loc] = (value as string).split(',');
                     const locId = LocPack.getByName(loc);
                     if (locId === -1) {
-                        throw new Error(`Unknown multiloc: ${loc}`);
+                        throw packStepError(debugname, `Unknown multiloc: ${loc}`);
                     }
 
                     multiloc[parseInt(index)] = locId;
@@ -354,30 +349,13 @@ export function packLocConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
 
             const models: LocModelShape[] = [];
             for (let i = 0; i < srcModels.length; i++) {
-                let directReference = ModelPack.getByName(srcModels[i]) !== -1;
-                for (let shape = 0; shape <= 22; shape++) {
-                    if (shape === 10) {
-                        continue;
-                    }
-
-                    if (ModelPack.getByName(`${srcModels[i]}${LocShapeSuffix[shape]}`) !== -1) {
-                        directReference = false;
-                        break;
-                    }
-                }
-
-                if (directReference) {
-                    // if a model directly points to a shape, we are forcing that shape to appear as centrepiece_straight
-                    const forceModelId = ModelPack.getByName(srcModels[i]);
-                    if (forceModelId !== -1) {
-                        modelFlags[forceModelId] |= 0x4;
-                        models.push({ model: forceModelId, shape: LocShapeSuffix._8 });
-                        continue;
-                    }
-                }
-
                 // centrepiece_straight comes first in their data, so we check it first
-                const modelId = ModelPack.getByName(`${srcModels[i]}_8`);
+                let modelId = ModelPack.getByName(srcModels[i]);
+
+                // todo: temp fallback until content gets reorganized in this branch
+                if (modelId === -1) {
+                    modelId = ModelPack.getByName(`${srcModels[i]}_8`);
+                }
 
                 if (modelId !== -1) {
                     modelFlags[modelId] |= 0x4;
@@ -400,31 +378,14 @@ export function packLocConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
 
             const ldModels: LocModelShape[] = [];
             for (let i = 0; i < srcLdModels.length; i++) {
-                let directReference = ModelPack.getByName(srcLdModels[i]) !== -1;
-                for (let shape = 0; shape <= 22; shape++) {
-                    if (shape === 10) {
-                        continue;
-                    }
-
-                    if (ModelPack.getByName(`${srcLdModels[i]}${LocShapeSuffix[shape]}`) !== -1) {
-                        directReference = false;
-                        break;
-                    }
-                }
-
-                if (directReference) {
-                    // if a model directly points to a shape, we are forcing that shape to appear as centrepiece_straight
-                    const ldForceModelId = ModelPack.getByName(`${srcLdModels[i]}`);
-
-                    if (ldForceModelId !== -1) {
-                        modelFlags[ldForceModelId] |= 0x4;
-                        ldModels.push({ model: ldForceModelId, shape: LocShapeSuffix._8 });
-                        continue;
-                    }
-                }
-
                 // centrepiece_straight comes first in their data, so we check it first
-                const ldModelId = ModelPack.getByName(`${srcLdModels[i]}_8`);
+                let ldModelId = ModelPack.getByName(srcLdModels[i]);
+
+                // todo: temp fallback until content gets reorganized in this branch
+                if (ldModelId === -1) {
+                    ldModelId = ModelPack.getByName(`${srcLdModels[i]}_8`);
+                }
+
                 if (ldModelId !== -1) {
                     modelFlags[ldModelId] |= 0x4;
                     ldModels.push({ model: ldModelId, shape: LocShapeSuffix._8 });
@@ -447,6 +408,22 @@ export function packLocConfigs(configs: Map<string, ConfigLine[]>, modelFlags: n
             if ((srcModels.length > 0 && models.length === 0) || (srcLdModels.length > 0 && ldModels.length === 0)) {
                 throw packStepError(debugname, 'Failed to find suitable loc models');
             }
+
+            models.sort((a, b) => {
+                if (a.shape === b.shape) {
+                    return 0;
+                }
+
+                return a.shape === LocShapeSuffix._8 ? -1 : b.shape === LocShapeSuffix._8 ? 1 : a.shape - b.shape;
+            });
+
+            ldModels.sort((a, b) => {
+                if (a.shape === b.shape) {
+                    return 0;
+                }
+
+                return a.shape === LocShapeSuffix._8 ? -1 : b.shape === LocShapeSuffix._8 ? 1 : a.shape - b.shape;
+            });
 
             if (models.length > 0) {
                 let centrepieceOnly = true;

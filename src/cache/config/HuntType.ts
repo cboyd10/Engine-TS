@@ -1,6 +1,5 @@
 import fs from 'fs';
 
-
 import { ConfigType } from '#/cache/config/ConfigType.js';
 import { HuntCheckNotTooStrong } from '#/engine/entity/hunt/HuntCheckNotTooStrong.js';
 import { HuntModeType } from '#/engine/entity/hunt/HuntModeType.js';
@@ -70,6 +69,8 @@ export default class HuntType extends ConfigType {
                 return value === checkValue;
             case '!':
                 return value !== checkValue;
+            case '&':
+                return (value & checkValue) === 0;
         }
         return false;
     }
@@ -92,6 +93,7 @@ export default class HuntType extends ConfigType {
     checkLoc: number = -1;
     checkInv: number = -1;
     checkObjParam: number = -1;
+    checkObjCat: number = -1;
     checkInvCondition: string = '';
     checkInvVal: number = -1;
     checkVars: { varId: number; condition: string; val: number }[] = [];
@@ -137,7 +139,12 @@ export default class HuntType extends ConfigType {
             this.checkObjParam = dat.g2();
             this.checkInvCondition = dat.gjstr();
             this.checkInvVal = dat.g4s();
-        } else if (code > 17 && code < 21) {
+        } else if (code === 18) {
+            this.checkInv = dat.g2();
+            this.checkObjCat = dat.g2();
+            this.checkInvCondition = dat.gjstr();
+            this.checkInvVal = dat.g4s();
+        } else if (code > 18 && code < 22) {
             this.checkVars.push({ varId: dat.g2(), condition: dat.gjstr(), val: dat.g4s() });
         } else if (code === 250) {
             this.debugname = dat.gjstr();

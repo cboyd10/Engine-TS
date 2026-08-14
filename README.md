@@ -56,15 +56,5 @@ Content developers should run `npm start`. The server will watch for changes to 
 
 Engine developers should run `npm run dev`. This does what `npm start` does above, but also completely restarts the server when engine code has changed.
 
-## Common Issues
-
-* `'"java"' is not recognized as an internal or external command`  
-
-You do not have Java installed. See [dependencies](#dependencies) above.
-
-* `XXXXX has been compiled by a more recent version of the Java Runtime (class file version 61.0), this version of the Java Runtime only recognizes class file versions up to 52.0`  
-
-You are using Java 8 or Java 11. If you have multiple Java versions, you will need to set `JAVA_PATH=path-to-java.exe` in your .env file manually.
-
 ## License
 This project is licensed under the [MIT License](https://opensource.org/licenses/MIT). See the [LICENSE](LICENSE) file for details.
