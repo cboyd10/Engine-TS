@@ -178,8 +178,9 @@ export type ParamValue = {
 export type LocModelShape = { model: number; shape: number };
 export type HuntCheckInv = { inv: number; obj: number; condition: string; val: number };
 export type HuntCheckInvParam = { inv: number; param: number; condition: string; val: number };
+export type HuntCheckInvCat = { inv: number; category: number; condition: string; val: number };
 export type HuntCheckVar = { varp: number; condition: string; val: number };
-export type ConfigValue = string | number | boolean | number[] | LocModelShape[] | ParamValue | HuntCheckInv | HuntCheckInvParam | HuntCheckVar;
+export type ConfigValue = string | number | boolean | number[] | LocModelShape[] | ParamValue | HuntCheckInv | HuntCheckInvParam | HuntCheckInvCat | HuntCheckVar;
 export type ConfigLine = { key: string; value: ConfigValue };
 
 // we're using null for invalid values, undefined for invalid keys
@@ -319,6 +320,37 @@ export async function readConfigs(
 
 function noOp() {}
 
+export function loadConstants() {
+    CONSTANTS.clear();
+
+    loadDir(`${Environment.build.srcDir}/scripts`, '.constant', src => {
+        for (let i = 0; i < src.length; i++) {
+            if (!src[i] || src[i].startsWith('//')) {
+                continue;
+            }
+
+            const parts = src[i].split('=');
+
+            if (parts.length !== 2) {
+                throw new Error(`Bad constant declaration on line: ${src[i]}`);
+            }
+
+            let name = parts[0].trim();
+            const value = parts[1].trim();
+
+            if (name.startsWith('^')) {
+                name = name.substring(1);
+            }
+
+            if (CONSTANTS.has(name)) {
+                throw new Error(`Duplicate constant found: ${name}`);
+            }
+
+            CONSTANTS.set(name, value);
+        }
+    });
+}
+
 export function shouldBuildConfigOutput(ext: string, out: string) {
     return shouldBuild(`${Environment.build.srcDir}/scripts`, '.constant', out) || shouldBuild(`${Environment.build.srcDir}/scripts`, ext, out) || shouldBuildFileList(getConfigDependencyFiles(ext), out);
 }
@@ -407,34 +439,7 @@ export async function packConfigs(cache: FileStream, modelFlags: number[]) {
         return;
     }
 
-    CONSTANTS.clear();
-
-    loadDir(`${Environment.build.srcDir}/scripts`, '.constant', src => {
-        for (let i = 0; i < src.length; i++) {
-            if (!src[i] || src[i].startsWith('//')) {
-                continue;
-            }
-
-            const parts = src[i].split('=');
-
-            if (parts.length !== 2) {
-                throw new Error(`Bad constant declaration on line: ${src[i]}`);
-            }
-
-            let name = parts[0].trim();
-            const value = parts[1].trim();
-
-            if (name.startsWith('^')) {
-                name = name.substring(1);
-            }
-
-            if (CONSTANTS.has(name)) {
-                throw new Error(`Duplicate constant found: ${name}`);
-            }
-
-            CONSTANTS.set(name, value);
-        }
-    });
+    loadConstants();
 
     // var domains are global, so we need to check for conflicts
     const names = new Set<string>();

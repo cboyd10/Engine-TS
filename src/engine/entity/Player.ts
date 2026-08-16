@@ -33,7 +33,7 @@ import { PlayerQueueRequest, PlayerQueueType, QueueType, ScriptArgument } from '
 import { PlayerStat, PlayerStatEnabled, PlayerStatFree, PlayerStatNameMap } from '#/engine/entity/PlayerStat.js';
 import InputTracking from '#/engine/entity/tracking/InputTracking.js';
 import { WealthEventParams } from '#/engine/entity/tracking/WealthEvent.js';
-import { changeNpcCollision, changePlayerCollision, findNaivePath, reachedEntity, reachedLoc, reachedObj } from '#/engine/GameMap.js';
+import { changeNpcCollision, changePlayerOccCollision, findNaivePath, reachedEntity, reachedLoc, reachedObj } from '#/engine/GameMap.js';
 import { Inventory, InventoryListener } from '#/engine/Inventory.js';
 import ScriptFile from '#/engine/script/ScriptFile.js';
 import ScriptPointer from '#/engine/script/ScriptPointer.js';
@@ -409,6 +409,7 @@ export default class Player extends PathingEntity {
     chatColour: number | null = null;
     chatEffect: number | null = null;
     chatRights: number | null = null;
+    npcId: number = -1;
 
     constructor(username: string, username37: bigint, hash64: bigint) {
         super(
@@ -418,7 +419,7 @@ export default class Player extends PathingEntity {
             1,
             1,
             EntityLifeCycle.FOREVER,
-            BlockWalk.NPC,
+            BlockWalk.PLAYER,
             Environment.node.clientRoutefinder ? MoveStrategy.NAIVE : MoveStrategy.SMART,
             PlayerInfoProt.FACE_COORD,
             PlayerInfoProt.FACE_ENTITY
@@ -722,7 +723,7 @@ export default class Player extends PathingEntity {
     }
 
     blockWalkFlag(): CollisionFlag {
-        return CollisionFlag.PLAYER;
+        return CollisionFlag.BLOCK_NPC_AND_PLAYERS;
     }
 
     defaultMoveSpeed(): MoveSpeed {
@@ -1357,8 +1358,6 @@ export default class Player extends PathingEntity {
         stream.p1(this.gender);
         stream.p1(this.headicons);
 
-        // todo: transmog support - write first "slot" with -1, followed by npc ID
-
         const skippedSlots = [];
 
         let worn = this.getInventory(this.appearanceInv);
@@ -1388,6 +1387,12 @@ export default class Player extends PathingEntity {
         }
 
         for (let slot = 0; slot < 12; slot++) {
+            if (this.npcId != -1) {
+                stream.p2(-1);
+                stream.p2(this.npcId);
+                break;
+            }
+
             if (skippedSlots.indexOf(slot) !== -1) {
                 stream.p1(0);
                 continue;
@@ -1960,12 +1965,12 @@ export default class Player extends PathingEntity {
         // This doesn't actually cancel interactions, source: https://youtu.be/ARS7eO3_Z8U?si=OkYfjW0sVhkQmQ8y&t=293
         this.visibility = visibility;
         if (visibility === Visibility.DEFAULT) {
-            this.blockWalk = BlockWalk.NPC;
-            changeNpcCollision(this.width, this.x, this.z, this.level, true);
+            this.blockWalk = BlockWalk.PLAYER;
+            changePlayerOccCollision(this.width, this.x, this.z, this.level, true);
         } else {
             this.blockWalk = BlockWalk.NONE;
             changeNpcCollision(this.width, this.x, this.z, this.level, false);
-            changePlayerCollision(this.width, this.x, this.z, this.level, false);
+            changePlayerOccCollision(this.width, this.x, this.z, this.level, false);
         }
         this.messageGame(`vis: ${visibility}`);
     }

@@ -4,7 +4,10 @@ import Packet from '#/io/Packet.js';
 
 const cache = new FileStream('data/unpack');
 
-function printCrcs(jagName: string, jag: Jagfile) {
+function printCrcs(jagName: string, src: Uint8Array) {
+    console.log(jagName, Packet.getcrc(src, 0, src.length));
+
+    const jag = new Jagfile(new Packet(src));
     for (const name of jag.fileName) {
         const file = jag.read(name)!;
         console.log(jagName, name, Packet.getcrc(file.data, 0, file.length));
@@ -13,6 +16,14 @@ function printCrcs(jagName: string, jag: Jagfile) {
     }
 }
 
-printCrcs('config', new Jagfile(new Packet(cache.read(0, 2))));
-printCrcs('interface', new Jagfile(new Packet(cache.read(0, 3))));
-printCrcs('synth', new Jagfile(new Packet(cache.read(0, 8))));
+printCrcs('title', cache.read(0, 1)!);
+printCrcs('config', cache.read(0, 2)!);
+printCrcs('interface', cache.read(0, 3)!);
+printCrcs('media', cache.read(0, 4)!);
+printCrcs('versionlist', cache.read(0, 5)!);
+printCrcs('textures', cache.read(0, 6)!);
+printCrcs('wordenc', cache.read(0, 7)!);
+printCrcs('synth', cache.read(0, 8)!);
+
+// const wordenc = new Packet(cache.read(0, 7));
+// wordenc.save('data/raw/wordenc', wordenc.length);

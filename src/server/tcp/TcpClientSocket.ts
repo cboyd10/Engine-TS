@@ -17,9 +17,8 @@ export default class TcpClientSocket extends ClientSocket {
     }
 
     close(): void {
-        // give time to acknowledge and receive packets
         this.state = -1;
-        setTimeout(() => this.socket.end(), 1000);
+        this.socket.end();
     }
 
     terminate(): void {
