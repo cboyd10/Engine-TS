@@ -10,6 +10,9 @@ import { register } from 'prom-client';
 
 import { CrcBuffer, CrcTable } from '#/cache/CrcTable.js';
 
+import { db } from '#/db/query.js';
+
+import { PlayerStatNameMap } from '#/engine/entity/PlayerStat.js';
 import OnDemand from '#/engine/OnDemand.js';
 import World from '#/engine/World.js';
 
@@ -247,6 +250,54 @@ fastify.get<{ Params: { crc: string } }>('/sounds:crc', async (req, reply) => {
     }
 
     reply.send(OnDemand.cache.read(0, 8));
+});
+
+// hiscore & activity routes
+
+type HiscoreRow = {
+    username: string;
+    level: number;
+    value: number;
+};
+
+type HiscoreCategory = {
+    name: string;
+    rows: HiscoreRow[];
+};
+
+fastify.get('/hiscores', async (_req, reply) => {
+    const [overall, skills] = await Promise.all([
+        db
+            .selectFrom('hiscore_large')
+            .innerJoin('account', 'account.id', 'hiscore_large.account_id')
+            .select(['account.username', 'hiscore_large.level', 'hiscore_large.value'])
+            .where('hiscore_large.type', '=', 0)
+            .orderBy('hiscore_large.value', 'desc')
+            .execute(),
+        db.selectFrom('hiscore').innerJoin('account', 'account.id', 'hiscore.account_id').select(['account.username', 'hiscore.type', 'hiscore.level', 'hiscore.value']).orderBy('hiscore.type', 'asc').orderBy('hiscore.value', 'desc').execute()
+    ]);
+
+    const skillCategories = new Map<number, HiscoreCategory>();
+    for (const row of skills) {
+        let category = skillCategories.get(row.type);
+        if (!category) {
+            const statName = PlayerStatNameMap.get(row.type - 1);
+            category = { name: statName ? statName.charAt(0) + statName.slice(1).toLowerCase() : `Skill ${row.type}`, rows: [] };
+            skillCategories.set(row.type, category);
+        }
+
+        category.rows.push({ username: row.username, level: row.level, value: row.value });
+    }
+
+    const categories: HiscoreCategory[] = [{ name: 'Overall', rows: overall.map(row => ({ username: row.username, level: row.level, value: row.value })) }, ...skillCategories.values()];
+
+    return reply.viewAsync('hiscores.ejs', { categories });
+});
+
+fastify.get('/activity', async (_req, reply) => {
+    const logs = await db.selectFrom('session_log').select(['id', 'timestamp', 'event']).where('event_type', '=', LoggerEventType.ADVENTURE).orderBy('id', 'desc').limit(200).execute();
+
+    return reply.viewAsync('activity.ejs', { logs });
 });
 
 // map editor routes

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hiscores</title>
+    <style>
+        :root {
+            --root-bg: #1b1d19;
+            --color-base-100: #131512;
+            --color-base-200: #1b1d19;
+            --color-base-300: #232621;
+            --color-base-content: oklch(96% 0.003 264.542);
+            --color-primary: #2d322a;
+            --color-primary-content: #e6e3d5;
+            --color-accent: #c9a86a;
+            --color-siam-300: #a3aa9e;
+            --color-siam-700: #41473e;
+
+            --bg: var(--root-bg);
+            --surface: var(--color-base-100);
+            --surface-2: var(--color-primary);
+            --text: var(--color-primary-content);
+            --muted: var(--color-siam-300);
+            --accent: var(--color-accent);
+            --border: var(--color-siam-700);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            min-height: 100%;
+            background: var(--bg);
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            color: var(--text);
+            background: var(--bg);
+        }
+
+        main {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 24px 16px 64px;
+        }
+
+        h1 {
+            color: var(--accent);
+            font-size: 22px;
+            margin-bottom: 4px;
+        }
+
+        p.subtitle {
+            color: var(--muted);
+            margin-top: 0;
+            margin-bottom: 24px;
+        }
+
+        section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        section h2 {
+            margin: 0;
+            padding: 10px 14px;
+            background: var(--surface-2);
+            color: var(--accent);
+            font-size: 15px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 6px 14px;
+            border-top: 1px solid var(--border);
+            font-size: 13px;
+        }
+
+        th {
+            color: var(--muted);
+            font-weight: normal;
+        }
+
+        tr:nth-child(even) td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        td.rank {
+            color: var(--muted);
+            width: 40px;
+        }
+
+        p.empty {
+            color: var(--muted);
+            padding: 14px;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Hiscores</h1>
+        <p class="subtitle">Player rankings by skill.</p>
+
+        <% categories.forEach(function(category) { %>
+            <section>
+                <h2><%= category.name %></h2>
+                <% if (category.rows.length === 0) { %>
+                    <p class="empty">No scores yet.</p>
+                <% } else { %>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Player</th>
+                                <th>Level</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% category.rows.forEach(function(row, index) { %>
+                                <tr>
+                                    <td class="rank"><%= index + 1 %></td>
+                                    <td><%= row.username %></td>
+                                    <td><%= row.level %></td>
+                                    <td><%= row.value %></td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                <% } %>
+            </section>
+        <% }); %>
+    </main>
+</body>
+</html>
