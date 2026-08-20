@@ -10,11 +10,16 @@ import ScriptState from '#/engine/script/ScriptState.js';
 import { check, CoordValid, LocTypeValid, NumberPositive, SeqTypeValid, SpotAnimTypeValid, FindSquareValid } from '#/engine/script/ScriptValidators.js';
 import World from '#/engine/World.js';
 import Environment from '#/util/Environment.js';
+import LiveConfig from '#/util/LiveConfig.js';
 import Midi from '#/cache/midi/Midi.js';
 
 const ServerOps: CommandHandlers = {
     [ScriptOpcode.MAP_CLOCK]: state => {
         state.pushInt(World.currentTick);
+    },
+
+    [ScriptOpcode.DROPRATE_MULTIPLIER]: state => {
+        state.pushInt(LiveConfig.dropRateMultiplier);
     },
 
     [ScriptOpcode.MAP_MEMBERS]: state => {

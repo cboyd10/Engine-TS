@@ -33,8 +33,15 @@ import ClientCheat from '#/network/game/client/model/ClientCheat.js';
 import { LoggerEventType } from '#/server/logger/LoggerEventType.js';
 
 import Environment from '#/util/Environment.js';
+import LiveConfig from '#/util/LiveConfig.js';
 import { printDebug } from '#/util/Logger.js';
 import { tryParseInt } from '#/util/TryParse.js';
+
+const commandHelp: { [key: string]: string } = {
+    xprate: '::xprate <positive integer> - sets the global XP rate multiplier.',
+    droprate: '::droprate <positive integer> - sets the global drop rate multiplier.',
+    rates: '::rates - shows the current XP and drop rate multipliers.'
+};
 
 export default class ClientCheatHandler extends ClientGameMessageHandler<ClientCheat> {
     handle(message: ClientCheat, player: Player): boolean {
@@ -680,6 +687,43 @@ export default class ClientCheatHandler extends ClientGameMessageHandler<ClientC
                 } else {
                     player.messageGame(`Player '${args[0]}' does not exist or is not logged in.`);
                 }
+            } else if (cmd === 'xprate') {
+                if (args[0] === '-h') {
+                    player.messageGame(commandHelp.xprate);
+                    return false;
+                }
+
+                const rate = tryParseInt(args[0], -1);
+                if (rate < 1) {
+                    player.messageGame('::xprate <positive integer>');
+                    return false;
+                }
+
+                LiveConfig.xpRateMultiplier = rate;
+                player.messageGame(`XP rate set to ${rate}x.`);
+            } else if (cmd === 'droprate') {
+                if (args[0] === '-h') {
+                    player.messageGame(commandHelp.droprate);
+                    return false;
+                }
+
+                const rate = tryParseInt(args[0], -1);
+                if (rate < 1) {
+                    player.messageGame('::droprate <positive integer>');
+                    return false;
+                }
+
+                LiveConfig.dropRateMultiplier = rate;
+                player.messageGame(`Drop rate set to ${rate}x.`);
+            } else if (cmd === 'rates') {
+                if (args[0] === '-h') {
+                    player.messageGame(commandHelp.rates);
+                    return false;
+                }
+
+                player.messageGame(`XP rate: ${LiveConfig.xpRateMultiplier}x, Drop rate: ${LiveConfig.dropRateMultiplier}x.`);
+            } else if (cmd === 'help') {
+                player.messageGame('Custom commands: ::xprate <n>, ::droprate <n>, ::rates, ::help. Add -h to any command for details, e.g. ::xprate -h.');
             }
         }
 

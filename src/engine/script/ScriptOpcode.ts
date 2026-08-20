@@ -63,6 +63,7 @@ export const enum ScriptOpcode {
     SPOTANIM_MAP,
     WORLD_DELAY, // official
     MIDI_LENGTH,
+    DROPRATE_MULTIPLIER,
 
     // Player ops (2000-2499)
     AFK_EVENT = 2000,
@@ -496,6 +497,7 @@ export const ScriptOpcodeMap: Map<string, number> = new Map([
     ['COORDY', ScriptOpcode.COORDY],
     ['COORDZ', ScriptOpcode.COORDZ],
     ['DISTANCE', ScriptOpcode.DISTANCE],
+    ['DROPRATE_MULTIPLIER', ScriptOpcode.DROPRATE_MULTIPLIER],
     ['INZONE', ScriptOpcode.INZONE],
     ['LINEOFSIGHT', ScriptOpcode.LINEOFSIGHT],
     ['LINEOFWALK', ScriptOpcode.LINEOFWALK],
