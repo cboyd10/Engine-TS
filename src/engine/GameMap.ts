@@ -49,7 +49,8 @@ export default class GameMap {
     }
 
     init(): void {
-        if (!fs.existsSync(`${Environment.build.srcDir}/maps`)) {
+        const zipPath = 'data/pack/.cache/maps-server.zip';
+        if (!fs.existsSync(`${Environment.build.srcDir}/maps`) && !fs.existsSync(zipPath)) {
             return;
         }
 
@@ -63,7 +64,6 @@ export default class GameMap {
             this.loadCsvMap(this.freemap, fs.readFileSync(`${Environment.build.srcDir}/maps/free2play.csv`, 'ascii').split(/\r?\n/));
         }
 
-        const zipPath = 'data/pack/.cache/maps-server.zip';
         if (fs.existsSync(zipPath)) {
             const mapEntries = unzipSync(fs.readFileSync(zipPath));
             const maps: string[] = Object.keys(mapEntries).filter(name => name[0] === 'm');
