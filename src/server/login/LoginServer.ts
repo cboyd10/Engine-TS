@@ -465,6 +465,15 @@ export default class LoginServer {
                             }
 
                             await fsp.writeFile(`data/players/${profile}/${username}.sav`, raw);
+
+                            const account = await db
+                                .selectFrom('account')
+                                .leftJoin('account_login', join => join.onRef('account_id', '=', 'id').on('profile', '=', profile))
+                                .where('username', '=', username)
+                                .selectAll()
+                                .executeTakeFirst();
+
+                            await updateHiscores(account, PlayerLoading.load(username, new Packet(raw), null), profile);
                         } else {
                             console.error(username, 'Invalid save file');
                         }
