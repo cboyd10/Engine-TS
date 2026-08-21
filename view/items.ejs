@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Item Sources</title>
+    <style>
+        :root {
+            --root-bg: #1b1d19;
+            --color-base-100: #131512;
+            --color-base-200: #1b1d19;
+            --color-primary: #2d322a;
+            --color-primary-content: #e6e3d5;
+            --color-accent: #c9a86a;
+            --color-siam-300: #a3aa9e;
+            --color-siam-700: #41473e;
+
+            --bg: var(--root-bg);
+            --surface: var(--color-base-100);
+            --surface-2: var(--color-primary);
+            --text: var(--color-primary-content);
+            --muted: var(--color-siam-300);
+            --accent: var(--color-accent);
+            --border: var(--color-siam-700);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            min-height: 100%;
+            background: var(--bg);
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            color: var(--text);
+            background: var(--bg);
+        }
+
+        main {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 24px 16px 64px;
+        }
+
+        h1 {
+            color: var(--accent);
+            font-size: 22px;
+            margin-bottom: 4px;
+        }
+
+        p.subtitle {
+            color: var(--muted);
+            margin-top: 0;
+            margin-bottom: 24px;
+        }
+
+        form.search {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        form.search input[type="text"] {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 14px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+        }
+
+        form.search button {
+            padding: 8px 16px;
+            font-size: 14px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--accent);
+            cursor: pointer;
+        }
+
+        form.search button:hover {
+            border-color: var(--accent);
+        }
+
+        section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        section h2 {
+            margin: 0;
+            padding: 10px 14px;
+            background: var(--surface-2);
+            color: var(--accent);
+            font-size: 15px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 6px 14px;
+            border-top: 1px solid var(--border);
+            font-size: 13px;
+        }
+
+        th {
+            color: var(--muted);
+            font-weight: normal;
+        }
+
+        tr:nth-child(even) td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        td.item {
+            color: var(--accent);
+        }
+
+        td.numeric {
+            font-variant-numeric: tabular-nums;
+        }
+
+        a.map-link {
+            color: var(--accent);
+        }
+
+        span.map-link-disabled {
+            color: var(--muted);
+        }
+
+        p.empty {
+            color: var(--muted);
+            padding: 14px;
+            margin: 0;
+        }
+
+        .canvas-frame {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px;
+            display: inline-block;
+        }
+
+        canvas {
+            display: block;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Item Sources</h1>
+        <p class="subtitle">Search for an item to see where it's sold and where it spawns on the ground.</p>
+
+        <form class="search" method="get" action="/items">
+            <input type="text" name="q" placeholder="e.g. snape grass" value="<%= query %>" autofocus>
+            <button type="submit">Search</button>
+        </form>
+
+        <% if (!results) { %>
+            <p class="empty">Enter an item name above to search.</p>
+        <% } else if (results.shops.length === 0 && results.groundSpawns.length === 0) { %>
+            <p class="empty">No shop stock or ground spawns found for "<%= query %>". (Drop-table sources aren't indexed yet.)</p>
+        <% } else { %>
+            <section>
+                <h2>Shop Stock</h2>
+                <% if (results.shops.length === 0) { %>
+                    <p class="empty">No shop sells this item.</p>
+                <% } else { %>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Shop</th>
+                                <th>NPC</th>
+                                <th>Area</th>
+                                <th>Stock</th>
+                                <th>Price</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% results.shops.forEach(function(row) { %>
+                                <tr>
+                                    <td class="item"><%= row.item %></td>
+                                    <td><%= row.shop %></td>
+                                    <td><%= row.npcName ?? 'Unknown' %></td>
+                                    <td><%= row.area %></td>
+                                    <td class="numeric"><%= row.quantity %></td>
+                                    <td class="numeric"><%= row.price %></td>
+                                    <td>
+                                        <% if (row.locations.length > 0) { %>
+                                            <a class="map-link" href="#map" onclick="focusMap(<%= row.locations[0].x %>, <%= row.locations[0].z %>); return false;">Show on Map</a>
+                                        <% } else { %>
+                                            <span class="map-link-disabled">No known location</span>
+                                        <% } %>
+                                    </td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                <% } %>
+            </section>
+
+            <section>
+                <h2>Ground Spawns</h2>
+                <% if (results.groundSpawns.length === 0) { %>
+                    <p class="empty">No ground spawns found for this item.</p>
+                <% } else { %>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Area</th>
+                                <th>Coords</th>
+                                <th>Qty</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% results.groundSpawns.forEach(function(row) { %>
+                                <tr>
+                                    <td class="item"><%= row.item %></td>
+                                    <td><%= row.area ?? 'Unknown area' %></td>
+                                    <td class="numeric"><%= row.x %>, <%= row.z %> (plane <%= row.level %>)</td>
+                                    <td class="numeric"><%= row.quantity %></td>
+                                    <td>
+                                        <a class="map-link" href="#map" onclick="focusMap(<%= row.x %>, <%= row.z %>); return false;">Show on Map</a>
+                                    </td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                <% } %>
+            </section>
+
+            <%
+                const itemMarkers = results.groundSpawns.map(r => ({ x: r.x, z: r.z }));
+                const npcMarkers = [];
+                results.shops.forEach(s => s.locations.forEach(l => npcMarkers.push({ x: l.x, z: l.z })));
+                const initialCenter = itemMarkers[0] || npcMarkers[0] || null;
+            %>
+
+            <section id="map">
+                <h2>Map</h2>
+                <div style="padding: 8px 14px 14px;">
+                    <p class="subtitle" style="margin: 0 0 8px;">Red dots are ground spawns, yellow dots are shop npcs. Click a "Show on Map" link above to re-center.</p>
+                    <div class="canvas-frame">
+                        <canvas id="canvas" width="860" height="560"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <script type="module">
+                import { MapView } from '/mapview/mapview.js';
+
+                const itemMarkers = <%- JSON.stringify(itemMarkers) %>;
+                const npcMarkers = <%- JSON.stringify(npcMarkers) %>;
+                const initialCenter = <%- JSON.stringify(initialCenter) %>;
+
+                const mapView = new MapView();
+                window.__mapView = mapView;
+
+                window.focusMap = function (x, z) {
+                    window.__mapView.centerOn(x, z);
+                    document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                };
+
+                const applyMarkers = () => {
+                    mapView.setMarkers(itemMarkers, npcMarkers);
+                    if (initialCenter) {
+                        mapView.centerOn(initialCenter.x, initialCenter.z);
+                    }
+                };
+
+                // markers/centering only take effect once maininit() has finished
+                // loading worldmap.jag
+                const waitForLoad = setInterval(() => {
+                    if (mapView.loaded) {
+                        clearInterval(waitForLoad);
+                        applyMarkers();
+                    }
+                }, 100);
+            </script>
+        <% } %>
+    </main>
+</body>
+</html>

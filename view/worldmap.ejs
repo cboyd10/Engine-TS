@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>World Map</title>
+    <style>
+        :root {
+            --root-bg: #1b1d19;
+            --color-base-100: #131512;
+            --color-primary: #2d322a;
+            --color-primary-content: #e6e3d5;
+            --color-accent: #c9a86a;
+            --color-siam-300: #a3aa9e;
+            --color-siam-700: #41473e;
+
+            --bg: var(--root-bg);
+            --surface: var(--color-base-100);
+            --surface-2: var(--color-primary);
+            --text: var(--color-primary-content);
+            --muted: var(--color-siam-300);
+            --accent: var(--color-accent);
+            --border: var(--color-siam-700);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            min-height: 100%;
+            background: var(--bg);
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            color: var(--text);
+            background: var(--bg);
+        }
+
+        main {
+            max-width: 940px;
+            margin: 0 auto;
+            padding: 24px 16px 64px;
+        }
+
+        h1 {
+            color: var(--accent);
+            font-size: 22px;
+            margin-bottom: 4px;
+        }
+
+        p.subtitle {
+            color: var(--muted);
+            margin-top: 0;
+            margin-bottom: 16px;
+        }
+
+        p.subtitle a {
+            color: var(--accent);
+        }
+
+        .canvas-frame {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px;
+            display: inline-block;
+        }
+
+        canvas {
+            display: block;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>World Map</h1>
+        <p class="subtitle">
+            <% if (highlight) { %>
+                Highlighting (<%= highlight.x %>, <%= highlight.z %>). Drag to pan, use the zoom buttons in the bottom-left to zoom.
+            <% } else { %>
+                Drag to pan, use the zoom buttons in the bottom-left to zoom.
+            <% } %>
+            &middot; <a href="/items">Back to item search</a>
+        </p>
+
+        <div class="canvas-frame">
+            <canvas id="canvas" width="900" height="600"></canvas>
+        </div>
+    </main>
+
+    <script type="module">
+        import { MapView } from '/mapview/mapview.js';
+
+        const highlight = <%- JSON.stringify(highlight) %>;
+        const mapView = new MapView();
+
+        const waitForLoad = setInterval(() => {
+            if (mapView.loaded) {
+                clearInterval(waitForLoad);
+                if (highlight) {
+                    mapView.setMarkers([highlight], []);
+                    mapView.centerOn(highlight.x, highlight.z);
+                }
+            }
+        }, 100);
+    </script>
+</body>
+</html>
