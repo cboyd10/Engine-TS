@@ -15,12 +15,8 @@ import { printInfo } from '#/util/Logger.js';
 import { startManagementWeb } from '#/web.js';
 import InvType from '#/cache/config/InvType.js';
 
-async function updateHiscores(account: { id: number; staffmodlevel: number; banned_until: string | null } | undefined, player: Player, profile: string) {
+async function updateHiscores(account: { id: number; banned_until: string | null } | undefined, player: Player, profile: string) {
     if (!account) return;
-
-    if (account.staffmodlevel > 1) {
-        return;
-    }
 
     if (account.banned_until !== null && new Date(account.banned_until) >= new Date()) {
         return;
