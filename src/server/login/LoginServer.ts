@@ -72,27 +72,25 @@ async function updateHiscores(account: { id: number; staffmodlevel: number; bann
             continue;
         }
 
-        if (player.baseLevels[stat] >= 15) {
-            const hiscoreType = stat + 1;
+        const hiscoreType = stat + 1;
 
-            // todo: can we upsert in kysely?
-            const existing = await db.selectFrom('hiscore').select('type').select('value').where('account_id', '=', account.id).where('type', '=', hiscoreType).where('profile', '=', profile).executeTakeFirst();
-            if (existing && existing.value !== player.stats[stat]) {
-                update.push({
-                    type: hiscoreType,
-                    level: player.baseLevels[stat],
-                    value: player.stats[stat],
-                    date: toDbDate(new Date())
-                });
-            } else if (!existing) {
-                insert.push({
-                    account_id: account.id,
-                    profile,
-                    type: hiscoreType,
-                    level: player.baseLevels[stat],
-                    value: player.stats[stat]
-                });
-            }
+        // todo: can we upsert in kysely?
+        const existing = await db.selectFrom('hiscore').select('type').select('value').where('account_id', '=', account.id).where('type', '=', hiscoreType).where('profile', '=', profile).executeTakeFirst();
+        if (existing && existing.value !== player.stats[stat]) {
+            update.push({
+                type: hiscoreType,
+                level: player.baseLevels[stat],
+                value: player.stats[stat],
+                date: toDbDate(new Date())
+            });
+        } else if (!existing) {
+            insert.push({
+                account_id: account.id,
+                profile,
+                type: hiscoreType,
+                level: player.baseLevels[stat],
+                value: player.stats[stat]
+            });
         }
     }
 

@@ -12,7 +12,7 @@ import { CrcBuffer, CrcTable } from '#/cache/CrcTable.js';
 
 import { db } from '#/db/query.js';
 
-import { PlayerStatNameMap } from '#/engine/entity/PlayerStat.js';
+import { PlayerStatEnabled, PlayerStatNameMap } from '#/engine/entity/PlayerStat.js';
 import OnDemand from '#/engine/OnDemand.js';
 import World from '#/engine/World.js';
 
@@ -277,19 +277,28 @@ fastify.get('/hiscores', async (_req, reply) => {
         db.selectFrom('hiscore').innerJoin('account', 'account.id', 'hiscore.account_id').select(['account.username', 'hiscore.type', 'hiscore.level', 'hiscore.value']).orderBy('hiscore.type', 'asc').orderBy('hiscore.value', 'desc').execute()
     ]);
 
-    const skillCategories = new Map<number, HiscoreCategory>();
+    const rowsByType = new Map<number, HiscoreRow[]>();
     for (const row of skills) {
-        let category = skillCategories.get(row.type);
-        if (!category) {
-            const statName = PlayerStatNameMap.get(row.type - 1);
-            category = { name: statName ? statName.charAt(0) + statName.slice(1).toLowerCase() : `Skill ${row.type}`, rows: [] };
-            skillCategories.set(row.type, category);
-        }
-
-        category.rows.push({ username: row.username, level: row.level, value: row.value });
+        const rows = rowsByType.get(row.type) ?? [];
+        rows.push({ username: row.username, level: row.level, value: row.value });
+        rowsByType.set(row.type, rows);
     }
 
-    const categories: HiscoreCategory[] = [{ name: 'Overall', rows: overall.map(row => ({ username: row.username, level: row.level, value: row.value })) }, ...skillCategories.values()];
+    const skillCategories: HiscoreCategory[] = [];
+    for (let stat = 0; stat < PlayerStatEnabled.length; stat++) {
+        if (!PlayerStatEnabled[stat]) {
+            continue;
+        }
+
+        const hiscoreType = stat + 1;
+        const statName = PlayerStatNameMap.get(stat);
+        skillCategories.push({
+            name: statName ? statName.charAt(0) + statName.slice(1).toLowerCase() : `Skill ${hiscoreType}`,
+            rows: rowsByType.get(hiscoreType) ?? []
+        });
+    }
+
+    const categories: HiscoreCategory[] = [{ name: 'Overall', rows: overall.map(row => ({ username: row.username, level: row.level, value: row.value })) }, ...skillCategories];
 
     return reply.viewAsync('hiscores.ejs', { categories });
 });
