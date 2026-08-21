@@ -1854,7 +1854,7 @@ export default class Player extends PathingEntity {
             this.changeStat(stat);
 
             // fun logging for players :)
-            this.addSessionLog(LoggerEventType.ADVENTURE, 'Levelled up ' + PlayerStatNameMap.get(stat)?.toLowerCase() + ' from ' + before + ' to ' + this.baseLevels[stat]);
+            this.addSessionLog(LoggerEventType.ADVENTURE, `${this.displayName} levelled up ` + PlayerStatNameMap.get(stat)?.toLowerCase() + ' from ' + before + ' to ' + this.baseLevels[stat]);
 
             let total = 0;
             let freeTotal = 0;
@@ -1874,13 +1874,13 @@ export default class Player extends PathingEntity {
             const prevMilestone = ((total - (this.baseLevels[stat] - before)) / milestone) | 0;
             const currMilestone = (total / milestone) | 0;
             if (currMilestone > prevMilestone) {
-                this.addSessionLog(LoggerEventType.ADVENTURE, `Reached total level ${currMilestone * milestone}`);
+                this.addSessionLog(LoggerEventType.ADVENTURE, `${this.displayName} reached total level ${currMilestone * milestone}`);
             }
             if (total === 1881) {
-                this.addSessionLog(LoggerEventType.ADVENTURE, 'Reached total level 1881 - you beat p2p!');
+                this.addSessionLog(LoggerEventType.ADVENTURE, `${this.displayName} reached total level 1881 - you beat p2p!`);
             }
             if (freeTotal === 1485) {
-                this.addSessionLog(LoggerEventType.ADVENTURE, 'Reached total level 1485 - you beat f2p!');
+                this.addSessionLog(LoggerEventType.ADVENTURE, `${this.displayName} reached total level 1485 - you beat f2p!`);
             }
 
             const script = ScriptProvider.getByTriggerSpecific(ServerTriggerType.ADVANCESTAT, stat, -1);
