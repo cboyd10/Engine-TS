@@ -23,6 +23,7 @@ import { LoggerEventType } from '#/server/logger/LoggerEventType.js';
 import WSClientSocket from '#/server/ws/WSClientSocket.js';
 
 import Environment from '#/util/Environment.js';
+import { searchItemSources } from '#/util/ItemSourceIndex.js';
 import { tryParseInt } from '#/util/TryParse.js';
 import { createDefaultWorldConfig, loadWorldConfig, normalizeWorldConfig, saveWorldConfig } from '#/util/WorldConfig.js';
 
@@ -309,20 +310,39 @@ fastify.get('/activity', async (_req, reply) => {
     return reply.viewAsync('activity.ejs', { logs });
 });
 
+// item source lookup route
+
+fastify.get<{ Querystring: { q?: string } }>('/items', async (req, reply) => {
+    const query = req.query.q ?? '';
+    const results = query.trim() ? searchItemSources(query) : null;
+
+    return reply.viewAsync('items.ejs', { query, results });
+});
+
+// world map routes
+
+fastify.get('/worldmap.jag', async (_req, reply) => {
+    const filePath = 'data/pack/mapview/worldmap.jag';
+
+    if (!fileExists(filePath)) {
+        reply.status(404);
+        return;
+    }
+
+    return reply.type('application/octet-stream').send(fs.createReadStream(filePath));
+});
+
+fastify.get<{ Querystring: { x?: string; z?: string } }>('/worldmap', async (req, reply) => {
+    const x = tryParseInt(req.query.x, -1);
+    const z = tryParseInt(req.query.z, -1);
+    const highlight = x >= 0 && z >= 0 ? { x, z } : null;
+
+    return reply.viewAsync('worldmap.ejs', { highlight });
+});
+
 // map editor routes
 
 if (Environment.node.debug) {
-    fastify.get('/worldmap.jag', async (_req, reply) => {
-        const filePath = 'data/pack/mapview/worldmap.jag';
-
-        if (!fileExists(filePath)) {
-            reply.status(404);
-            return;
-        }
-
-        return reply.type('application/octet-stream').send(fs.createReadStream(filePath));
-    });
-
     fastify.addContentTypeParser('*', { parseAs: 'buffer' }, (_req, body, done) => {
         done(null, body);
     });
