@@ -105,20 +105,15 @@ class NodeSqliteConnection implements DatabaseConnection {
                     continue;
                 } else if (isSqliteError(err)) {
                     console.error(err.message);
-                    break;
+                    throw err;
                 } else {
                     console.error(err);
-                    break;
+                    throw err;
                 }
             }
         }
 
-        console.warn('executeQuery failed');
-        return {
-            insertId: 0n,
-            numAffectedRows: 0n,
-            rows: []
-        };
+        throw new Error('executeQuery failed: SQLITE_BUSY retries exhausted');
     }
 
     async *streamQuery<R>(compiledQuery: CompiledQuery): AsyncIterableIterator<QueryResult<R>> {
