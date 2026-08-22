@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Commands - RuneScape</title>
+<link rel="stylesheet" href="/website/theme.css">
+<link rel="stylesheet" href="/website/tables.css">
+<style>
+.cmdtable th, .cmdtable td { padding: 4px 14px 4px 0; vertical-align: top; }
+.cmdname { white-space: nowrap; font-weight: bold; }
+.ex { display: block; color: #a3aa9e; font-size: 11px; margin-top: 1px; }
+.lvl { white-space: nowrap; }
+.lvl-player { color: #a3aa9e; }
+.lvl-moderator { color: #5c9a8c; }
+.lvl-administrator { color: #c9a86a; }
+</style>
+</head>
+<body bgcolor="black" text="white" link="#90c040" alink="#90c040" vlink="#90c040" style="margin:0px">
+
+<%- include('partials/frame-header') %>
+
+<table width="300" bgcolor="black" cellpadding="4"><tbody><tr><td class="e"><center>
+<b>Commands</b><br><a href="/" class="c">Main menu</a>
+</center></td></tr></tbody></table>
+
+<br>
+<table width="700" bgcolor="black" cellpadding="10"><tbody><tr><td class="e">
+<table class="rs-table cmdtable">
+<thead><tr><th>Command</th><th>Account Level</th><th>Description</th></tr></thead>
+<tbody>
+<% commands.forEach(function(cmd) { %>
+    <tr>
+        <td class="cmdname"><%= cmd.syntax %></td>
+        <td class="lvl lvl-<%= cmd.tier %>"><%= tierLabels[cmd.tier] %></td>
+        <td><%= cmd.description %><span class="ex">e.g. <%= cmd.example %></span></td>
+    </tr>
+<% }); %>
+</tbody>
+</table>
+</td></tr></tbody></table>
+<br>
+
+<%- include('partials/frame-footer') %>
+
+</body>
+</html>
