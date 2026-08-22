@@ -1,0 +1,62 @@
+/*
+ * Shared 2004-era reskin theme for the public website (issue #51).
+ *
+ * Every website page wraps its content in the bordered/padded 1024px frame
+ * (see view/partials/frame-header.ejs / frame-footer.ejs), which relies on
+ * the classes below. Include this stylesheet on any page that uses the
+ * frame partial.
+ */
+
+body, td, p {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 13px;
+}
+
+/* Outset "stone" button borders used for the main nav buttons. */
+.b {
+    border-style: outset;
+    border-width: 3pt;
+    border-color: #373737;
+}
+
+/* Same button border, used for the single "featured" (red) button. */
+.b2 {
+    border-style: outset;
+    border-width: 3pt;
+    border-color: #570700;
+}
+
+/* Thin inset panel border, e.g. the "Main Features" box. */
+.e {
+    border: 2px solid #382418;
+}
+
+/* Green link color used throughout the reskin. */
+.c {
+    text-decoration: none;
+    color: #90c040;
+}
+
+a.c:hover {
+    text-decoration: underline;
+}
+
+.whitelink {
+    color: white;
+    text-decoration: none;
+}
+
+a.whitelink:hover {
+    text-decoration: underline;
+}
+
+/* Centered 1024px page shell every frame-wrapped page uses. */
+.shell {
+    width: 1024px;
+    margin: 30px auto 40px;
+    text-align: center;
+}
+
+.shell table {
+    margin: 0 auto;
+}

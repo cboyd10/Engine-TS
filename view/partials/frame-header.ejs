@@ -1,0 +1,18 @@
+<%# Shared bordered/padded 1024px frame -- top half.
+
+    Opens the vine-bordered "shell" every website page uses: the top
+    vine-cap row, then the left/mid/right background columns (3-slice tile
+    so the vine border works at 1024px instead of the original fixed
+    600px-wide background2.jpg). Pair with partials/frame-footer.ejs, which
+    closes everything this opens.
+
+    Usage: include this partial, then page content, then frame-footer. #%>
+<div class="shell">
+
+<table cellpadding="0" cellspacing="0" style="width:1024px;"><tbody><tr>
+<td valign="top"><img src="/website/edge_a.jpg" width="100" height="43"></td>
+<td valign="top" style="width:824px;height:43px;background-image:url('/website/edge_c.jpg');background-repeat:repeat-x;background-position:left top;"></td>
+<td valign="top"><img src="/website/edge_d.jpg" width="100" height="43"></td>
+</tr></tbody></table>
+
+<table width="1024" cellpadding="0" cellspacing="0" border="0"><tbody><tr><td width="44" style="background-image:url('/website/bg-left.jpg'); background-repeat:repeat-y;">&nbsp;</td><td style="background-image:url('/website/bg-mid.jpg'); background-repeat:repeat; padding: 28px 40px;" valign="bottom"><center>

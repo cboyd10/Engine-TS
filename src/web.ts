@@ -86,7 +86,7 @@ fastify.route({
     method: 'GET',
     url: '/',
     handler: (_req, reply) => {
-        return reply.redirect('/rs2.cgi', 302);
+        return reply.viewAsync('home.ejs', {});
     },
     wsHandler: (socket, req) => {
         const client = new WSClientSocket(
