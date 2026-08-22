@@ -1,149 +1,113 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Hiscores</title>
-    <style>
-        :root {
-            --root-bg: #1b1d19;
-            --color-base-100: #131512;
-            --color-base-200: #1b1d19;
-            --color-base-300: #232621;
-            --color-base-content: oklch(96% 0.003 264.542);
-            --color-primary: #2d322a;
-            --color-primary-content: #e6e3d5;
-            --color-accent: #c9a86a;
-            --color-siam-300: #a3aa9e;
-            --color-siam-700: #41473e;
-
-            --bg: var(--root-bg);
-            --surface: var(--color-base-100);
-            --surface-2: var(--color-primary);
-            --text: var(--color-primary-content);
-            --muted: var(--color-siam-300);
-            --accent: var(--color-accent);
-            --border: var(--color-siam-700);
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        html {
-            min-height: 100%;
-            background: var(--bg);
-        }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, sans-serif;
-            color: var(--text);
-            background: var(--bg);
-        }
-
-        main {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 24px 16px 64px;
-        }
-
-        h1 {
-            color: var(--accent);
-            font-size: 22px;
-            margin-bottom: 4px;
-        }
-
-        p.subtitle {
-            color: var(--muted);
-            margin-top: 0;
-            margin-bottom: 24px;
-        }
-
-        section {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            margin-bottom: 20px;
-            overflow: hidden;
-        }
-
-        section h2 {
-            margin: 0;
-            padding: 10px 14px;
-            background: var(--surface-2);
-            color: var(--accent);
-            font-size: 15px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th, td {
-            text-align: left;
-            padding: 6px 14px;
-            border-top: 1px solid var(--border);
-            font-size: 13px;
-        }
-
-        th {
-            color: var(--muted);
-            font-weight: normal;
-        }
-
-        tr:nth-child(even) td {
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        td.rank {
-            color: var(--muted);
-            width: 40px;
-        }
-
-        p.empty {
-            color: var(--muted);
-            padding: 14px;
-            margin: 0;
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RuneScape Hiscores<% if (selectedCategory !== 'Overall') { %> - <%= selectedCategory %><% } %></title>
+<link rel="stylesheet" href="/website/theme.css">
+<link rel="stylesheet" href="/website/tables.css">
+<style>
+.hs-highlight td { background: #3a3a1a; }
+.hs-search-box { width: 150px; }
+.hs-empty { padding: 14px; }
+</style>
 </head>
-<body>
-    <main>
-        <h1>Hiscores</h1>
-        <p class="subtitle">Player rankings by skill.</p>
+<body bgcolor="black" text="white" link="#90c040" alink="#90c040" vlink="#90c040" style="margin:0px">
 
-        <% categories.forEach(function(category) { %>
-            <section>
-                <h2><%= category.name %></h2>
-                <% if (category.rows.length === 0) { %>
-                    <p class="empty">No scores yet.</p>
-                <% } else { %>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Rank</th>
-                                <th>Player</th>
-                                <th>Level</th>
-                                <th>Value</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <% category.rows.forEach(function(row, index) { %>
-                                <tr>
-                                    <td class="rank"><%= index + 1 %></td>
-                                    <td><%= row.username %></td>
-                                    <td><%= row.level %></td>
-                                    <td><%= row.value %></td>
-                                </tr>
-                            <% }); %>
-                        </tbody>
-                    </table>
-                <% } %>
-            </section>
-        <% }); %>
-    </main>
+<%- include('partials/frame-header') %>
+
+<table width="250" bgcolor="black" cellpadding="4"><tbody><tr><td class="e"><center>
+<b>RuneScape Hiscores</b><br><a href="/" class="c">Main menu</a>
+</center></td></tr></tbody></table>
+
+<br>
+
+<center><table><tbody><tr>
+<td width="160" valign="top"><center><b>Select hiscore table</b><br>
+<table width="150" bgcolor="black" cellpadding="4"><tbody><tr><td class="e"><center>
+<table cellspacing="1" cellpadding="0">
+<tbody>
+<% categories.forEach(function(cat) { %>
+    <tr>
+        <td><img src="/website/<%= cat.icon %>" width="16" height="16"></td>
+        <td>&nbsp;</td>
+        <td>
+            <% if (cat.name === selectedCategory) { %>
+                <a href="/hiscores?category=<%= encodeURIComponent(cat.name) %>" class="c"><b><%= cat.name %></b></a>
+            <% } else { %>
+                <a href="/hiscores?category=<%= encodeURIComponent(cat.name) %>" class="c"><%= cat.name %></a>
+            <% } %>
+        </td>
+    </tr>
+<% }); %>
+</tbody>
+</table>
+</center></td></tr></tbody></table>
+</center></td>
+
+<td width="299" valign="top"><center>
+<b><%= selectedCategory %> Hiscores</b><br>
+<table width="270" bgcolor="black" cellpadding="4"><tbody><tr><td class="e"><center>
+<% if (rows.length === 0) { %>
+    <p class="hs-empty">No scores yet.</p>
+<% } else { %>
+    <table class="rs-table">
+        <thead>
+            <tr>
+                <th class="numeric">Rank</th>
+                <th>Name</th>
+                <th class="numeric">Level</th>
+                <th class="numeric">XP</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% rows.forEach(function(row) { %>
+                <tr<% if (highlightRank !== null && row.rank === highlightRank) { %> class="hs-highlight"<% } %>>
+                    <td class="numeric"><%= row.rank %></td>
+                    <td><a href="/hiscores/player/<%= encodeURIComponent(row.username) %>" class="c"><%= row.username %></a></td>
+                    <td class="numeric"><%= row.level %></td>
+                    <td class="numeric"><%= row.value.toLocaleString() %></td>
+                </tr>
+            <% }); %>
+        </tbody>
+    </table>
+    <% if (searchNotFound) { %>
+        <p class="hs-empty">No match found for "<%= searchValue %>" in <%= selectedCategory %>.</p>
+    <% } %>
+    <p class="hs-empty">
+        <% if (page > 1) { %><a href="/hiscores?category=<%= encodeURIComponent(selectedCategory) %>&page=<%= page - 1 %>" class="c">&laquo; Prev</a><% } %>
+        &nbsp;Page <%= page %> of <%= totalPages %>&nbsp;
+        <% if (page < totalPages) { %><a href="/hiscores?category=<%= encodeURIComponent(selectedCategory) %>&page=<%= page + 1 %>" class="c">Next &raquo;</a><% } %>
+    </p>
+<% } %>
+</center></td></tr></tbody></table>
+</center></td>
+</tr></tbody></table></center>
+
+<br>
+
+<table cellspacing="0" cellpadding="0"><tbody><tr>
+<td style="padding-right:8px;">
+<table width="150" bgcolor="black" cellpadding="4"><tbody><tr><td class="b" bgcolor="#474747" background="/website/stoneback.gif"><center>
+<form method="get" action="/hiscores" style="display:inline">
+<input type="hidden" name="category" value="<%= selectedCategory %>">
+<b>Search by rank</b><br>
+<input type="text" class="hs-search-box" maxlength="12" size="12" name="search" value="">
+<br>
+<input type="submit" value="Search" style="margin-top:4px">
+</form></center></td></tr></tbody></table>
+</td><td style="padding-left:8px;">
+<table width="150" bgcolor="black" cellpadding="4"><tbody><tr><td class="b" bgcolor="#474747" background="/website/stoneback.gif"><center>
+<form method="get" action="/hiscores" style="display:inline">
+<input type="hidden" name="category" value="<%= selectedCategory %>">
+<b>Search by name</b><br>
+<input type="text" class="hs-search-box" maxlength="12" size="12" name="search" value="">
+<br>
+<input type="submit" value="Search" style="margin-top:4px">
+</form></center></td></tr></tbody></table>
+</td></tr></tbody></table>
+
+<%- include('partials/frame-footer') %>
+
 </body>
 </html>

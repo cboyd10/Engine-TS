@@ -24,7 +24,7 @@ import WSClientSocket from '#/server/ws/WSClientSocket.js';
 
 import Environment from '#/util/Environment.js';
 import { searchItemSources } from '#/util/ItemSourceIndex.js';
-import { tryParseInt } from '#/util/TryParse.js';
+import { tryParseInt, tryParseString } from '#/util/TryParse.js';
 import { createDefaultWorldConfig, loadWorldConfig, normalizeWorldConfig, saveWorldConfig } from '#/util/WorldConfig.js';
 
 function resolveContentPath(name: string): string | null {
@@ -255,53 +255,236 @@ fastify.get<{ Params: { crc: string } }>('/sounds:crc', async (req, reply) => {
 
 // hiscore & activity routes
 
+const HISCORES_PAGE_SIZE = 25;
+
+type HiscoreCategoryMeta = {
+    name: string;
+    hiscoreType: number;
+    large: boolean;
+    icon: string;
+};
+
 type HiscoreRow = {
+    rank: number;
     username: string;
     level: number;
     value: number;
 };
 
-type HiscoreCategory = {
+type HiscorePlayerStat = {
     name: string;
-    rows: HiscoreRow[];
+    icon: string;
+    level: number;
+    value: number;
+    rank: number | null;
 };
 
-fastify.get('/hiscores', async (_req, reply) => {
-    const [overall, skills] = await Promise.all([
-        db
-            .selectFrom('hiscore_large')
-            .innerJoin('account', 'account.id', 'hiscore_large.account_id')
-            .select(['account.username', 'hiscore_large.level', 'hiscore_large.value'])
-            .where('hiscore_large.type', '=', 0)
-            .orderBy('hiscore_large.value', 'desc')
-            .execute(),
-        db.selectFrom('hiscore').innerJoin('account', 'account.id', 'hiscore.account_id').select(['account.username', 'hiscore.type', 'hiscore.level', 'hiscore.value']).orderBy('hiscore.type', 'asc').orderBy('hiscore.value', 'desc').execute()
-    ]);
+// A player's rank/name icon uses a lowercase skill-name filename (e.g. attack.gif);
+// RUNECRAFT is the one stat whose PlayerStat enum name doesn't match its icon file
+// (runecrafting.gif), copied in from the approved mockup's assets/ folder.
+const HISCORE_ICON_OVERRIDES: Record<string, string> = { RUNECRAFT: 'runecrafting' };
 
-    const rowsByType = new Map<number, HiscoreRow[]>();
-    for (const row of skills) {
-        const rows = rowsByType.get(row.type) ?? [];
-        rows.push({ username: row.username, level: row.level, value: row.value });
-        rowsByType.set(row.type, rows);
-    }
+function hiscoreIconFor(rawStatName: string): string {
+    return `${HISCORE_ICON_OVERRIDES[rawStatName] ?? rawStatName.toLowerCase()}.gif`;
+}
 
-    const skillCategories: HiscoreCategory[] = [];
+const HISCORE_CATEGORIES: HiscoreCategoryMeta[] = (() => {
+    const categories: HiscoreCategoryMeta[] = [{ name: 'Overall', hiscoreType: 0, large: true, icon: 'blank.gif' }];
+
     for (let stat = 0; stat < PlayerStatEnabled.length; stat++) {
         if (!PlayerStatEnabled[stat]) {
             continue;
         }
 
-        const hiscoreType = stat + 1;
-        const statName = PlayerStatNameMap.get(stat);
-        skillCategories.push({
-            name: statName ? statName.charAt(0) + statName.slice(1).toLowerCase() : `Skill ${hiscoreType}`,
-            rows: rowsByType.get(hiscoreType) ?? []
+        const rawName = PlayerStatNameMap.get(stat);
+        if (!rawName) {
+            continue;
+        }
+
+        categories.push({
+            name: rawName.charAt(0) + rawName.slice(1).toLowerCase(),
+            hiscoreType: stat + 1,
+            large: false,
+            icon: hiscoreIconFor(rawName)
         });
     }
 
-    const categories: HiscoreCategory[] = [{ name: 'Overall', rows: overall.map(row => ({ username: row.username, level: row.level, value: row.value })) }, ...skillCategories];
+    return categories;
+})();
 
-    return reply.viewAsync('hiscores.ejs', { categories });
+async function countHiscoreCategoryRows(category: HiscoreCategoryMeta): Promise<number> {
+    if (category.large) {
+        const result = await db
+            .selectFrom('hiscore_large')
+            .where('type', '=', category.hiscoreType)
+            .select(({ fn }) => fn.countAll().as('count'))
+            .executeTakeFirst();
+        return Number(result?.count ?? 0);
+    }
+
+    const result = await db
+        .selectFrom('hiscore')
+        .where('type', '=', category.hiscoreType)
+        .select(({ fn }) => fn.countAll().as('count'))
+        .executeTakeFirst();
+    return Number(result?.count ?? 0);
+}
+
+async function queryHiscoreCategoryPage(category: HiscoreCategoryMeta, limit: number, offset: number): Promise<Array<{ username: string; level: number; value: number }>> {
+    if (category.large) {
+        return db
+            .selectFrom('hiscore_large')
+            .innerJoin('account', 'account.id', 'hiscore_large.account_id')
+            .select(['account.username', 'hiscore_large.level', 'hiscore_large.value'])
+            .where('hiscore_large.type', '=', category.hiscoreType)
+            .orderBy('hiscore_large.value', 'desc')
+            .limit(limit)
+            .offset(offset)
+            .execute();
+    }
+
+    return db
+        .selectFrom('hiscore')
+        .innerJoin('account', 'account.id', 'hiscore.account_id')
+        .select(['account.username', 'hiscore.level', 'hiscore.value'])
+        .where('hiscore.type', '=', category.hiscoreType)
+        .orderBy('hiscore.value', 'desc')
+        .limit(limit)
+        .offset(offset)
+        .execute();
+}
+
+async function rankForHiscoreValue(category: HiscoreCategoryMeta, value: number): Promise<number> {
+    if (category.large) {
+        const result = await db
+            .selectFrom('hiscore_large')
+            .where('type', '=', category.hiscoreType)
+            .where('value', '>', value)
+            .select(({ fn }) => fn.countAll().as('count'))
+            .executeTakeFirst();
+        return Number(result?.count ?? 0) + 1;
+    }
+
+    const result = await db
+        .selectFrom('hiscore')
+        .where('type', '=', category.hiscoreType)
+        .where('value', '>', value)
+        .select(({ fn }) => fn.countAll().as('count'))
+        .executeTakeFirst();
+    return Number(result?.count ?? 0) + 1;
+}
+
+async function findHiscoreRowByUsername(category: HiscoreCategoryMeta, username: string): Promise<{ username: string; level: number; value: number } | undefined> {
+    if (category.large) {
+        return db
+            .selectFrom('hiscore_large')
+            .innerJoin('account', 'account.id', 'hiscore_large.account_id')
+            .select(['account.username', 'hiscore_large.level', 'hiscore_large.value'])
+            .where('hiscore_large.type', '=', category.hiscoreType)
+            .where(db.fn('lower', ['account.username']), '=', username.toLowerCase())
+            .executeTakeFirst();
+    }
+
+    return db
+        .selectFrom('hiscore')
+        .innerJoin('account', 'account.id', 'hiscore.account_id')
+        .select(['account.username', 'hiscore.level', 'hiscore.value'])
+        .where('hiscore.type', '=', category.hiscoreType)
+        .where(db.fn('lower', ['account.username']), '=', username.toLowerCase())
+        .executeTakeFirst();
+}
+
+async function findHiscorePlayerCategoryStat(category: HiscoreCategoryMeta, accountId: number): Promise<{ level: number; value: number } | undefined> {
+    if (category.large) {
+        return db.selectFrom('hiscore_large').select(['level', 'value']).where('account_id', '=', accountId).where('type', '=', category.hiscoreType).executeTakeFirst();
+    }
+
+    return db.selectFrom('hiscore').select(['level', 'value']).where('account_id', '=', accountId).where('type', '=', category.hiscoreType).executeTakeFirst();
+}
+
+fastify.get<{ Querystring: { category?: string; page?: string; search?: string } }>('/hiscores', async (req, reply) => {
+    const categoryParam = tryParseString(req.query.category, HISCORE_CATEGORIES[0].name);
+    const category = HISCORE_CATEGORIES.find(c => c.name.toLowerCase() === categoryParam.toLowerCase()) ?? HISCORE_CATEGORIES[0];
+
+    let page = tryParseInt(req.query.page, 1);
+    if (!Number.isFinite(page) || page < 1) {
+        page = 1;
+    }
+
+    const searchValue = (req.query.search ?? '').trim();
+    let highlightRank: number | null = null;
+    let searchNotFound = false;
+
+    if (searchValue) {
+        if (/^\d+$/.test(searchValue)) {
+            highlightRank = parseInt(searchValue, 10);
+        } else {
+            const found = await findHiscoreRowByUsername(category, searchValue);
+            if (found) {
+                highlightRank = await rankForHiscoreValue(category, found.value);
+            }
+        }
+
+        if (highlightRank !== null && highlightRank >= 1) {
+            page = Math.ceil(highlightRank / HISCORES_PAGE_SIZE);
+        } else {
+            searchNotFound = true;
+        }
+    }
+
+    const total = await countHiscoreCategoryRows(category);
+    const totalPages = Math.max(1, Math.ceil(total / HISCORES_PAGE_SIZE));
+    page = Math.min(page, totalPages);
+
+    const offset = (page - 1) * HISCORES_PAGE_SIZE;
+    const pageRows = await queryHiscoreCategoryPage(category, HISCORES_PAGE_SIZE, offset);
+
+    const rows: HiscoreRow[] = pageRows.map((row, index) => ({
+        rank: offset + index + 1,
+        username: row.username,
+        level: row.level,
+        value: row.value
+    }));
+
+    return reply.viewAsync('hiscores.ejs', {
+        categories: HISCORE_CATEGORIES,
+        selectedCategory: category.name,
+        rows,
+        page,
+        totalPages,
+        highlightRank,
+        searchValue,
+        searchNotFound
+    });
+});
+
+fastify.get<{ Params: { username: string } }>('/hiscores/player/:username', async (req, reply) => {
+    const requestedUsername = req.params.username;
+
+    const account = await db
+        .selectFrom('account')
+        .select(['id', 'username'])
+        .where(db.fn('lower', ['username']), '=', requestedUsername.toLowerCase())
+        .executeTakeFirst();
+
+    if (!account) {
+        reply.status(404);
+        return reply.viewAsync('hiscores-player.ejs', { username: requestedUsername, found: false, stats: [] as HiscorePlayerStat[] });
+    }
+
+    const stats: HiscorePlayerStat[] = [];
+    for (const category of HISCORE_CATEGORIES) {
+        const stat = await findHiscorePlayerCategoryStat(category, account.id);
+        stats.push({
+            name: category.name,
+            icon: category.icon,
+            level: stat?.level ?? 0,
+            value: stat?.value ?? 0,
+            rank: stat ? await rankForHiscoreValue(category, stat.value) : null
+        });
+    }
+
+    return reply.viewAsync('hiscores-player.ejs', { username: account.username, found: true, stats });
 });
 
 fastify.get('/activity', async (_req, reply) => {

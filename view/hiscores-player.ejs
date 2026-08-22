@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RuneScape Hiscores - <%= username %></title>
+<link rel="stylesheet" href="/website/theme.css">
+<link rel="stylesheet" href="/website/tables.css">
+<style>
+.hs-search-box { width: 150px; }
+.hs-empty { padding: 14px; }
+</style>
+</head>
+<body bgcolor="black" text="white" link="#90c040" alink="#90c040" vlink="#90c040" style="margin:0px">
+
+<%- include('partials/frame-header') %>
+
+<table width="260" bgcolor="black" cellpadding="4"><tbody><tr><td class="e"><center>
+<b>RuneScape Hiscores</b><br><a href="/" class="c">Main menu</a> - <a href="/hiscores" class="c">All Hiscores</a>
+</center></td></tr></tbody></table>
+
+<br>
+
+<% if (!found) { %>
+    <table bgcolor="black" cellpadding="4" border="0"><tbody><tr><td class="e">
+        <center>No player named <span style="color:yellow;"><%= username %></span> was found.</center>
+    </td></tr></tbody></table>
+<% } else { %>
+    <table bgcolor="black" cellpadding="4" border="0"><tbody><tr><td class="e">
+        <center>RuneScape Hiscores for <span style="color:yellow;"><%= username %></span></center>
+        <p>
+        <table class="rs-table">
+            <thead>
+                <tr>
+                    <th colspan="3">Skill</th>
+                    <th class="numeric">Rank</th>
+                    <th class="numeric">Level</th>
+                    <th class="numeric">XP</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% stats.forEach(function(stat) { %>
+                    <tr>
+                        <td><img src="/website/<%= stat.icon %>" width="16" height="16"></td>
+                        <td>&nbsp;</td>
+                        <td><a href="/hiscores?category=<%= encodeURIComponent(stat.name) %>" class="c"><%= stat.name %></a></td>
+                        <td class="numeric"><%= stat.rank !== null ? stat.rank.toLocaleString() : 'Unranked' %></td>
+                        <td class="numeric"><%= stat.level %></td>
+                        <td class="numeric"><%= stat.value.toLocaleString() %></td>
+                    </tr>
+                <% }); %>
+            </tbody>
+        </table>
+        </p>
+    </td></tr></tbody></table>
+<% } %>
+
+<br>
+
+<table cellspacing="0" cellpadding="0"><tbody><tr>
+<td style="padding-right:8px;">
+<table width="150" bgcolor="black" cellpadding="4"><tbody><tr><td class="b" bgcolor="#474747" background="/website/stoneback.gif"><center>
+<form method="get" action="/hiscores" style="display:inline">
+<input type="hidden" name="category" value="Overall">
+<b>Search by rank</b><br>
+<input type="text" class="hs-search-box" maxlength="12" size="12" name="search" value="">
+<br>
+<input type="submit" value="Search" style="margin-top:4px">
+</form></center></td></tr></tbody></table>
+</td><td style="padding-left:8px;">
+<table width="150" bgcolor="black" cellpadding="4"><tbody><tr><td class="b" bgcolor="#474747" background="/website/stoneback.gif"><center>
+<form method="get" action="/hiscores" style="display:inline">
+<input type="hidden" name="category" value="Overall">
+<b>Search by name</b><br>
+<input type="text" class="hs-search-box" maxlength="12" size="12" name="search" value="<%= username %>">
+<br>
+<input type="submit" value="Search" style="margin-top:4px">
+</form></center></td></tr></tbody></table>
+</td></tr></tbody></table>
+
+<%- include('partials/frame-footer') %>
+
+</body>
+</html>
