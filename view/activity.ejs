@@ -1,120 +1,84 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Activity Feed</title>
-    <style>
-        :root {
-            --root-bg: #1b1d19;
-            --color-base-100: #131512;
-            --color-base-200: #1b1d19;
-            --color-primary: #2d322a;
-            --color-primary-content: #e6e3d5;
-            --color-accent: #c9a86a;
-            --color-siam-300: #a3aa9e;
-            --color-siam-700: #41473e;
-
-            --bg: var(--root-bg);
-            --surface: var(--color-base-100);
-            --text: var(--color-primary-content);
-            --muted: var(--color-siam-300);
-            --accent: var(--color-accent);
-            --border: var(--color-siam-700);
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        html {
-            min-height: 100%;
-            background: var(--bg);
-        }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, sans-serif;
-            color: var(--text);
-            background: var(--bg);
-        }
-
-        main {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 24px 16px 64px;
-        }
-
-        h1 {
-            color: var(--accent);
-            font-size: 22px;
-            margin-bottom: 4px;
-        }
-
-        p.subtitle {
-            color: var(--muted);
-            margin-top: 0;
-            margin-bottom: 24px;
-        }
-
-        ul {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            overflow: hidden;
-            background: var(--surface);
-        }
-
-        li {
-            padding: 8px 14px;
-            border-top: 1px solid var(--border);
-            font-size: 13px;
-        }
-
-        li:first-child {
-            border-top: none;
-        }
-
-        li:nth-child(even) {
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .timestamp {
-            color: var(--muted);
-            margin-right: 10px;
-            font-variant-numeric: tabular-nums;
-        }
-
-        p.empty {
-            color: var(--muted);
-            padding: 14px;
-            margin: 0;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            background: var(--surface);
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adventure Logs</title>
+<link rel="stylesheet" href="/website/theme.css">
+<link rel="stylesheet" href="/website/tables.css">
 </head>
-<body>
-    <main>
-        <h1>Activity Feed</h1>
-        <p class="subtitle">Recent quest completions and other adventures, most recent first.</p>
+<body bgcolor="black" text="white" link="#90c040" alink="#90c040" vlink="#90c040" style="margin:0px">
 
-        <% if (logs.length === 0) { %>
-            <p class="empty">No activity yet.</p>
-        <% } else { %>
-            <ul>
-                <% logs.forEach(function(log) { %>
-                    <li>
-                        <span class="timestamp"><%= log.timestamp %></span>
-                        <span class="event"><%= log.event %></span>
-                    </li>
-                <% }); %>
-            </ul>
-        <% } %>
-    </main>
+<%- include('partials/frame-header') %>
+
+<table width="300" bgcolor="black" cellpadding="4"><tbody><tr><td class="e"><center>
+<b>Adventure Logs</b><br><a href="/" class="c">Main menu</a>
+</center></td></tr></tbody></table>
+
+<br>
+<table width="540" bgcolor="black" cellpadding="10"><tbody><tr><td class="e">
+<center><b>Recent Activity</b> <span style="color:#9db8c3;font-size:11px;">(times shown in your local timezone)</span></center>
+
+<% if (logs.length === 0) { %>
+    <p style="text-align:center;">
+        <% if (search) { %>No activity found for "<%= search %>".<% } else { %>No activity yet.<% } %>
+    </p>
+<% } else { %>
+    <table class="rs-table"><tbody>
+        <% logs.forEach(function(log) { %>
+            <tr>
+                <td class="log-timestamp" data-iso="<%= log.timestamp %>" style="white-space:nowrap;color:#9db8c3;"><%= log.timestamp %></td>
+                <td><%= log.event %></td>
+            </tr>
+        <% }); %>
+    </tbody></table>
+<% } %>
+
+</td></tr></tbody></table>
+
+<br>
+
+<table width="220" bgcolor="black" cellpadding="4"><tbody><tr><td class="b" bgcolor="#474747" background="/website/stoneback.gif"><center>
+<form method="get" action="/activity" style="display:inline"><b>Search by name</b><br>
+<input type="text" maxlength="12" size="14" name="search" value="<%= search %>"><br>
+<input type="submit" value="Search" style="margin-top:4px">
+</form></center></td></tr></tbody></table>
+
+<%
+    function pageLink(targetPage) {
+        const params = new URLSearchParams();
+        if (targetPage > 1) {
+            params.set('page', String(targetPage));
+        }
+        if (search) {
+            params.set('search', search);
+        }
+        const qs = params.toString();
+        return '/activity' + (qs ? '?' + qs : '');
+    }
+%>
+<% if (page > 1 || hasNextPage) { %>
+<br>
+<p style="text-align:center;">
+    <% if (page > 1) { %><a class="c" href="<%= pageLink(page - 1) %>">&laquo; Newer</a><% } %>
+    <% if (page > 1 && hasNextPage) { %>&nbsp;|&nbsp;<% } %>
+    <% if (hasNextPage) { %><a class="c" href="<%= pageLink(page + 1) %>">Older &raquo;</a><% } %>
+</p>
+<% } %>
+
+<%- include('partials/frame-footer') %>
+
+<script>
+    document.querySelectorAll('.log-timestamp').forEach(function (el) {
+        var iso = el.getAttribute('data-iso');
+        if (!iso) {
+            return;
+        }
+
+        var formatted = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
+        el.textContent = formatted;
+    });
+</script>
+
 </body>
 </html>

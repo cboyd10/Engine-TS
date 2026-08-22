@@ -10,7 +10,7 @@ import { register } from 'prom-client';
 
 import { CrcBuffer, CrcTable } from '#/cache/CrcTable.js';
 
-import { db } from '#/db/query.js';
+import { db, toIsoTimestamp } from '#/db/query.js';
 
 import { PlayerStatEnabled, PlayerStatNameMap } from '#/engine/entity/PlayerStat.js';
 import OnDemand from '#/engine/OnDemand.js';
@@ -24,7 +24,7 @@ import WSClientSocket from '#/server/ws/WSClientSocket.js';
 
 import Environment from '#/util/Environment.js';
 import { searchItemSources } from '#/util/ItemSourceIndex.js';
-import { tryParseInt } from '#/util/TryParse.js';
+import { tryParseInt, tryParseString } from '#/util/TryParse.js';
 import { createDefaultWorldConfig, loadWorldConfig, normalizeWorldConfig, saveWorldConfig } from '#/util/WorldConfig.js';
 
 function resolveContentPath(name: string): string | null {
@@ -304,10 +304,40 @@ fastify.get('/hiscores', async (_req, reply) => {
     return reply.viewAsync('hiscores.ejs', { categories });
 });
 
-fastify.get('/activity', async (_req, reply) => {
-    const logs = await db.selectFrom('session_log').select(['id', 'timestamp', 'event']).where('event_type', '=', LoggerEventType.ADVENTURE).orderBy('id', 'desc').limit(200).execute();
+const ACTIVITY_PAGE_SIZE = 50;
 
-    return reply.viewAsync('activity.ejs', { logs });
+fastify.get<{ Querystring: { search?: string; page?: string } }>('/activity', async (req, reply) => {
+    const search = tryParseString(req.query.search, '').trim();
+    const page = Math.max(1, tryParseInt(req.query.page, 1));
+    const offset = (page - 1) * ACTIVITY_PAGE_SIZE;
+
+    let logsQuery = db.selectFrom('session_log').select(['id', 'timestamp', 'event']).where('event_type', '=', LoggerEventType.ADVENTURE);
+
+    if (search) {
+        // session_log has no separate username column - the display name is
+        // embedded directly in the free-text `event` message (e.g. "<name>
+        // levelled up ..."), so a name search is a substring match over it.
+        logsQuery = logsQuery.where('event', 'like', `%${search}%`);
+    }
+
+    // Fetch one row past the page size to know whether a next page exists,
+    // without a separate COUNT query.
+    const rows = await logsQuery
+        .orderBy('id', 'desc')
+        .limit(ACTIVITY_PAGE_SIZE + 1)
+        .offset(offset)
+        .execute();
+
+    const hasNextPage = rows.length > ACTIVITY_PAGE_SIZE;
+    const logs = rows.slice(0, ACTIVITY_PAGE_SIZE).map(row => ({
+        id: row.id,
+        event: row.event,
+        // Serialized as UTC ISO 8601 here; activity.ejs formats it into the
+        // viewer's browser-local timezone client-side.
+        timestamp: toIsoTimestamp(row.timestamp)
+    }));
+
+    return reply.viewAsync('activity.ejs', { logs, search, page, hasNextPage });
 });
 
 // item source lookup route
