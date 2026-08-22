@@ -10,6 +10,8 @@ import { register } from 'prom-client';
 
 import { CrcBuffer, CrcTable } from '#/cache/CrcTable.js';
 
+import { CommandTierLabel, commandDocs } from '#/data/commandDocs.js';
+
 import { db, toIsoTimestamp } from '#/db/query.js';
 
 import { PlayerStatEnabled, PlayerStatNameMap } from '#/engine/entity/PlayerStat.js';
@@ -530,6 +532,14 @@ fastify.get<{ Querystring: { q?: string } }>('/items', async (req, reply) => {
     const results = query.trim() ? searchItemSources(query) : null;
 
     return reply.viewAsync('items.ejs', { query, results });
+});
+
+// commands docs route
+
+const sortedCommandDocs = [...commandDocs].sort((a, b) => a.command.localeCompare(b.command));
+
+fastify.get('/commands', async (_req, reply) => {
+    return reply.viewAsync('commands.ejs', { commands: sortedCommandDocs, tierLabels: CommandTierLabel });
 });
 
 // world map routes
