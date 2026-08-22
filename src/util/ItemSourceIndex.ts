@@ -513,8 +513,16 @@ export function searchItemSources(query: string): { shops: ShopSource[]; groundS
         groundSpawns.push(...(index.spawnsByItem.get(name) ?? []));
     }
 
-    shops.sort((a, b) => a.item.localeCompare(b.item) || a.shop.localeCompare(b.shop));
-    groundSpawns.sort((a, b) => a.item.localeCompare(b.item) || a.x - b.x);
+    // sorted alphabetically by resolved area name first (issue #54), so results read
+    // grouped by location rather than by discovery/shop order; item name and shop name
+    // (or x coordinate) remain as tiebreakers for a stable, legible order within an area
+    shops.sort((a, b) => a.area.localeCompare(b.area) || a.item.localeCompare(b.item) || a.shop.localeCompare(b.shop));
+    groundSpawns.sort((a, b) => {
+        // unresolved areas (no nearby map label, rendered as "Unknown area") sort last
+        const areaA = a.area ?? '￿';
+        const areaB = b.area ?? '￿';
+        return areaA.localeCompare(areaB) || a.item.localeCompare(b.item) || a.x - b.x;
+    });
 
     return { shops, groundSpawns };
 }

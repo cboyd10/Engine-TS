@@ -46,3 +46,18 @@ export function toDbDate(date: Date | string | number) {
 
     return date.toISOString().slice(0, 19).replace('T', ' ');
 }
+
+// The mysql2 driver returns DATETIME columns as JS `Date` instances at
+// runtime (despite Kysely's generated column type being `string`), while
+// the sqlite dialect may hand back an ISO-ish string instead. Normalize
+// either shape to a UTC ISO 8601 string so views can serialize timestamps
+// for client-side, viewer-local-timezone formatting instead of relying on
+// EJS's implicit `<%= %>` -> `String(Date)` coercion (which renders in the
+// server process's local timezone).
+export function toIsoTimestamp(date: Date | string | number) {
+    if (typeof date === 'string' || typeof date === 'number') {
+        date = new Date(date);
+    }
+
+    return date.toISOString();
+}
