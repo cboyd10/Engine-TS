@@ -49,24 +49,24 @@
         <table class="rs-table">
             <thead>
                 <tr>
-                    <th>Area</th>
                     <th>Item</th>
                     <th>Shop</th>
                     <th>NPC</th>
                     <th class="numeric">Qty</th>
                     <th class="numeric">Price</th>
+                    <th>Area</th>
                     <th></th>
                 </tr>
             </thead>
             <tbody>
                 <% results.shops.forEach(function(row) { %>
                     <tr>
-                        <td><%= row.area %></td>
                         <td><%= row.item %></td>
                         <td><%= row.shop %></td>
                         <td><%= row.npcName ?? 'Unknown' %></td>
                         <td class="numeric"><%= row.quantity %></td>
                         <td class="numeric"><%= row.price %></td>
+                        <td><%= row.area %></td>
                         <td>
                             <% if (row.locations.length > 0) { %>
                                 <a class="c" href="#map" onclick="focusMap(<%= row.locations[0].x %>, <%= row.locations[0].z %>); return false;">Show on Map</a>
@@ -87,20 +87,20 @@
         <table class="rs-table">
             <thead>
                 <tr>
-                    <th>Area</th>
                     <th>Item</th>
                     <th class="numeric">Coords</th>
                     <th class="numeric">Qty</th>
+                    <th>Area</th>
                     <th></th>
                 </tr>
             </thead>
             <tbody>
                 <% results.groundSpawns.forEach(function(row) { %>
                     <tr>
-                        <td><%= row.area ?? 'Unknown area' %></td>
                         <td><%= row.item %></td>
                         <td class="numeric"><%= row.x %>, <%= row.z %> (plane <%= row.level %>)</td>
                         <td class="numeric"><%= row.quantity %></td>
+                        <td><%= row.area ?? 'Unknown area' %></td>
                         <td>
                             <a class="c" href="#map" onclick="focusMap(<%= row.x %>, <%= row.z %>); return false;">Show on Map</a>
                         </td>
