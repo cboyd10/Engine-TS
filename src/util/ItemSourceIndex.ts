@@ -38,6 +38,7 @@ export type NpcDropSource = {
     source: string;
     triggerKey: string;
     npcDebugnames: string[];
+    combatLevel: number | string | null;
     area: string | null;
     locations: NpcLocation[];
 };
@@ -688,6 +689,11 @@ export type NpcConfig = {
     // toms_zombie_monkey*) use a lowercase "op1=attack" and are excluded by
     // this, same as that scan.
     attackable: boolean;
+    // The NPC's real combat level, read from `vislevel=` - already trusted
+    // elsewhere in the engine (the client tooltip's "(level-N)" text, and
+    // Npc.ts's hunt-aggression check). `null` covers both a missing line and
+    // the non-combat `vislevel=hide` sentinel.
+    vislevel: number | null;
 };
 
 // See walkAllFiles()'s comment: intentionally includes `_unpack/` dumps.
@@ -702,10 +708,11 @@ export function loadAllNpcConfigs(): Map<string, NpcConfig> {
         let name: string | null = null;
         let category: string | null = null;
         let attackable = false;
+        let vislevel: number | null = null;
 
         const commit = () => {
             if (currentDebugname && !result.has(currentDebugname)) {
-                result.set(currentDebugname, { debugname: currentDebugname, name, category, attackable });
+                result.set(currentDebugname, { debugname: currentDebugname, name, category, attackable, vislevel });
             }
         };
 
@@ -718,6 +725,7 @@ export function loadAllNpcConfigs(): Map<string, NpcConfig> {
                 name = null;
                 category = null;
                 attackable = false;
+                vislevel = null;
                 continue;
             }
 
@@ -737,6 +745,16 @@ export function loadAllNpcConfigs(): Map<string, NpcConfig> {
 
             if (/^op\d+=Attack$/.test(line)) {
                 attackable = true;
+                continue;
+            }
+
+            if (line.startsWith('vislevel=')) {
+                const rawVislevel = line.slice('vislevel='.length).trim();
+                // Non-combat NPCs use `vislevel=hide` instead of a number -
+                // treat that (and anything else non-numeric) as "no combat
+                // level" rather than crashing.
+                const parsed = Number(rawVislevel);
+                vislevel = rawVislevel !== '' && Number.isFinite(parsed) ? parsed : null;
             }
         }
 
@@ -746,7 +764,24 @@ export function loadAllNpcConfigs(): Map<string, NpcConfig> {
     return result;
 }
 
-export type ResolvedTriggerSource = {
+// A single number when every debugname in `debugnames` shares the same real
+// combat level (`vislevel`), a "min-max" range string when they differ, or
+// null when none of them have a known combat level (non-attackable, or
+// vislevel=hide - shouldn't occur for NPCs that reach this table, but this
+// must not crash if it does).
+function computeCombatLevel(debugnames: string[], npcConfigs: Map<string, NpcConfig>): number | string | null {
+    const levels = debugnames.map(debugname => npcConfigs.get(debugname)?.vislevel).filter((level): level is number => level !== null && level !== undefined);
+
+    if (levels.length === 0) {
+        return null;
+    }
+
+    const min = Math.min(...levels);
+    const max = Math.max(...levels);
+    return min === max ? min : `${min}-${max}`;
+}
+
+type ResolvedTriggerSource = {
     label: string;
     debugnames: string[];
 };
@@ -831,6 +866,8 @@ function buildNpcDropSources(npcSpawns: Map<string, NpcLocation[]>, labels: MapL
             byArea.set(null, []);
         }
 
+        const combatLevel = computeCombatLevel(resolved.debugnames, npcConfigs);
+
         const emit = (item: string, quantity: number, numerator: bigint, denominator: bigint, guaranteed: boolean) => {
             const reducedGcd = guaranteed ? 1n : gcdBig(numerator, denominator);
             const reducedNumerator = guaranteed ? 1n : numerator / reducedGcd;
@@ -847,6 +884,7 @@ function buildNpcDropSources(npcSpawns: Map<string, NpcLocation[]>, labels: MapL
                     source: resolved.label,
                     triggerKey,
                     npcDebugnames: resolved.debugnames,
+                    combatLevel,
                     area,
                     locations
                 };
