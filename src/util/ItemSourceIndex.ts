@@ -43,7 +43,7 @@ export type NpcDropSource = {
     locations: NpcLocation[];
 };
 
-type MapLabel = {
+export type MapLabel = {
     name: string;
     x: number;
     z: number;
@@ -142,7 +142,7 @@ function loadObjNames(): Map<number, string> {
     return names;
 }
 
-function loadNpcNames(): Map<number, string> {
+export function loadNpcNames(): Map<number, string> {
     const names = new Map<number, string>();
     const packPath = path.join(contentRoot(), 'pack', 'npc.pack');
 
@@ -238,7 +238,7 @@ function loadShopOwners(): Map<string, ShopOwner[]> {
     return result;
 }
 
-function loadNpcSpawns(npcNames: Map<number, string>): Map<string, NpcLocation[]> {
+export function loadNpcSpawns(npcNames: Map<number, string>): Map<string, NpcLocation[]> {
     const result = new Map<string, NpcLocation[]>();
     const files: string[] = [];
     walkFiles(path.join(contentRoot(), 'maps'), '.jm2', files);
@@ -328,7 +328,7 @@ function loadShopInfo(npcNames: Map<number, string>): Map<string, ShopInfo> {
     return result;
 }
 
-function loadLabels(): MapLabel[] {
+export function loadLabels(): MapLabel[] {
     const labels: MapLabel[] = [];
     const labelsPath = path.join(contentRoot(), 'maps', 'labels.txt');
 
@@ -355,7 +355,7 @@ function loadLabels(): MapLabel[] {
     return labels;
 }
 
-function nearestLabel(labels: MapLabel[], x: number, z: number, maxDistance = 48): string | null {
+export function nearestLabel(labels: MapLabel[], x: number, z: number, maxDistance = 48): string | null {
     // labels are named waypoints on the overhead map, not plane-specific,
     // so match on x/z distance only - a ground-floor spawn under an upper-floor
     // labelled building (e.g. Draynor Manor) should still resolve to that label
@@ -527,13 +527,13 @@ type DropTable = {
     rows: DropTableRow[];
 };
 
-type DropTables = {
+export type DropTables = {
     tables: Map<string, DropTable>;
     // trigger key (e.g. "_citizen", "firegiant") -> table name
     triggers: Map<string, string>;
 };
 
-function loadDropTables(): DropTables {
+export function loadDropTables(): DropTables {
     const tables = new Map<string, DropTable>();
     const triggers = new Map<string, string>();
     const dir = path.join(contentRoot(), 'scripts', 'drop tables', 'webdata');
@@ -678,10 +678,17 @@ function gcdBig(a: bigint, b: bigint): bigint {
     return a === 0n ? 1n : a;
 }
 
-type NpcConfig = {
+export type NpcConfig = {
     debugname: string;
     name: string | null;
     category: string | null;
+    // true if any opN=Attack line appears in this debugname's section (any op
+    // slot - e.g. op2=Attack for a hostile NPC, op5=Attack for a right-click-only
+    // one). Case-sensitive exact "Attack" match, matching issue #79's scoping
+    // scan (614 debugnames) - a handful of quest NPCs (e.g. Monkey Madness'
+    // toms_zombie_monkey*) use a lowercase "op1=attack" and are excluded by
+    // this, same as that scan.
+    attackable: boolean;
     // The NPC's real combat level, read from `vislevel=` - already trusted
     // elsewhere in the engine (the client tooltip's "(level-N)" text, and
     // Npc.ts's hunt-aggression check). `null` covers both a missing line and
@@ -690,7 +697,7 @@ type NpcConfig = {
 };
 
 // See walkAllFiles()'s comment: intentionally includes `_unpack/` dumps.
-function loadAllNpcConfigs(): Map<string, NpcConfig> {
+export function loadAllNpcConfigs(): Map<string, NpcConfig> {
     const result = new Map<string, NpcConfig>();
     const files: string[] = [];
     walkAllFiles(path.join(contentRoot(), 'scripts'), '.npc', files);
@@ -700,11 +707,12 @@ function loadAllNpcConfigs(): Map<string, NpcConfig> {
         let currentDebugname: string | null = null;
         let name: string | null = null;
         let category: string | null = null;
+        let attackable = false;
         let vislevel: number | null = null;
 
         const commit = () => {
             if (currentDebugname && !result.has(currentDebugname)) {
-                result.set(currentDebugname, { debugname: currentDebugname, name, category, vislevel });
+                result.set(currentDebugname, { debugname: currentDebugname, name, category, attackable, vislevel });
             }
         };
 
@@ -716,6 +724,7 @@ function loadAllNpcConfigs(): Map<string, NpcConfig> {
                 currentDebugname = sectionMatch[1];
                 name = null;
                 category = null;
+                attackable = false;
                 vislevel = null;
                 continue;
             }
@@ -731,6 +740,11 @@ function loadAllNpcConfigs(): Map<string, NpcConfig> {
 
             if (line.startsWith('category=')) {
                 category = line.slice('category='.length).trim();
+                continue;
+            }
+
+            if (/^op\d+=Attack$/.test(line)) {
+                attackable = true;
                 continue;
             }
 
@@ -787,7 +801,7 @@ type ResolvedTriggerSource = {
 // dependency-free (matching the "no cache/pack dependency" requirement) and
 // costs no real validation: an unknown/misspelled category name simply
 // collects zero debugnames below and is treated as unresolved.
-function resolveTriggerKey(triggerKey: string, npcConfigs: Map<string, NpcConfig>): ResolvedTriggerSource | null {
+export function resolveTriggerKey(triggerKey: string, npcConfigs: Map<string, NpcConfig>): ResolvedTriggerSource | null {
     if (triggerKey.startsWith('_')) {
         const categoryName = triggerKey.slice(1);
 
