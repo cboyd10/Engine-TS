@@ -16,17 +16,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v6
+    - name: Clone Engine
+      uses: actions/checkout@v6
+      with:
+        path: engine
+
+    # ItemSourceIndex.ts's tests (issue #57) read real content data via
+    # Environment.build.srcDir, which defaults to '../content' - checking
+    # content out as a sibling of engine/ here (same layout Content's own
+    # "Verify Content" workflow uses) satisfies that with no extra config.
+    - name: Clone Content
+      uses: actions/checkout@v6
+      with:
+        repository: cboyd10/Content
+        ref: gamenight
+        path: content
 
     - uses: actions/setup-node@v6
       with:
         node-version: 24
         cache: npm
+        cache-dependency-path: engine/package-lock.json
 
-    - run: npm ci
+    - name: Install dependencies
+      working-directory: engine
+      run: npm ci
 
     - name: Lint
+      working-directory: engine
       run: npm run lint
 
     - name: Compile
+      working-directory: engine
       run: npx tsc --noEmit
+
+    - name: Test
+      working-directory: engine
+      run: npm test
