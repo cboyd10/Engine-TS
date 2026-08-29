@@ -30,6 +30,18 @@ export type GroundSpawnSource = {
     area: string | null;
 };
 
+export type NpcDropSource = {
+    item: string;
+    quantity: number;
+    chance: number;
+    rate: string;
+    source: string;
+    triggerKey: string;
+    npcDebugnames: string[];
+    area: string | null;
+    locations: NpcLocation[];
+};
+
 type MapLabel = {
     name: string;
     x: number;
@@ -40,6 +52,8 @@ type MapLabel = {
 type ItemIndex = {
     shopsByItem: Map<string, ShopSource[]>;
     spawnsByItem: Map<string, GroundSpawnSource[]>;
+    dropsByItem: Map<string, NpcDropSource[]>;
+    dropsByNpc: Map<string, NpcDropSource[]>;
 };
 
 let cachedIndex: ItemIndex | null = null;
@@ -61,6 +75,31 @@ function walkFiles(dir: string, extension: string, out: string[]): void {
                 continue;
             }
             walkFiles(full, extension, out);
+        } else if (entry.name.endsWith(extension)) {
+            out.push(full);
+        }
+    }
+}
+
+// Unlike walkFiles(), this does NOT skip `_unpack/<revision>/` dumps. Those
+// directories are genuinely compiled into the live pack (PackFile.ts's
+// `_unpack` check only suppresses a folder-naming lint; FsCache.ts's
+// listDir() walks it like any other directory), and several pilot NPC
+// categories (citizen/bear/guard/cow/chicken) are only fully populated
+// there - see content/scripts/drop tables/webdata/README.md. Only used for
+// category/debugname resolution, which needs that full picture; the
+// existing shop/ground-spawn loaders below intentionally keep skipping
+// `_unpack` for their own noise-reduction reasons and are unchanged.
+function walkAllFiles(dir: string, extension: string, out: string[]): void {
+    if (!fs.existsSync(dir)) {
+        return;
+    }
+
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+
+        if (entry.isDirectory()) {
+            walkAllFiles(full, extension, out);
         } else if (entry.name.endsWith(extension)) {
             out.push(full);
         }
@@ -465,15 +504,385 @@ function loadGroundSpawns(objNames: Map<number, string>, labels: MapLabel[]): Ma
     return result;
 }
 
+// ---------------------------------------------------------------------------
+// NPC drop sources (issue #57)
+//
+// content/scripts/drop tables/webdata/*.dropdata files are a hand-transcribed,
+// display-only mirror of the live [ai_queue3,<trigger>] drop-table scripts
+// (content/scripts/drop tables/scripts/*.rs2). They reuse drop_table.dbtable's
+// column layout for convention consistency but are parsed here with a new
+// lightweight regex parser - no DbTableType/DbRowType, no cache/pack
+// dependency, matching this file's existing loaders' style. See
+// content/scripts/drop tables/webdata/README.md for the format and the
+// branches excluded from every table (Ring of Wealth, Legends' Quest, clue
+// tertiary rolls).
+// ---------------------------------------------------------------------------
+
+type DropTableRow = { kind: 'drop'; item: string; quantity: number; weight: number } | { kind: 'subtable'; table: string; weight: number } | { kind: 'guaranteed'; item: string; quantity: number };
+
+type DropTable = {
+    name: string;
+    total: number;
+    rows: DropTableRow[];
+};
+
+type DropTables = {
+    tables: Map<string, DropTable>;
+    // trigger key (e.g. "_citizen", "firegiant") -> table name
+    triggers: Map<string, string>;
+};
+
+function loadDropTables(): DropTables {
+    const tables = new Map<string, DropTable>();
+    const triggers = new Map<string, string>();
+    const dir = path.join(contentRoot(), 'scripts', 'drop tables', 'webdata');
+    const files: string[] = [];
+    walkFiles(dir, '.dropdata', files);
+
+    for (const file of files) {
+        const isTriggerManifest = path.basename(file) === 'triggers.dropdata';
+        const lines = fs.readFileSync(file, 'ascii').split(/\r?\n/);
+
+        let currentName: string | null = null;
+        let total = 0;
+        let rows: DropTableRow[] = [];
+        let triggerTable: string | null = null;
+
+        const commit = () => {
+            if (!currentName) {
+                return;
+            }
+
+            if (isTriggerManifest) {
+                if (triggerTable) {
+                    triggers.set(currentName, triggerTable);
+                }
+            } else {
+                tables.set(currentName, { name: currentName, total, rows });
+            }
+        };
+
+        for (const raw of lines) {
+            const line = raw.trim();
+            if (!line || line.startsWith('//')) {
+                continue;
+            }
+
+            const sectionMatch = line.match(/^\[([a-zA-Z0-9_]+)\]$/);
+            if (sectionMatch) {
+                commit();
+                currentName = sectionMatch[1];
+                total = 0;
+                rows = [];
+                triggerTable = null;
+                continue;
+            }
+
+            if (!currentName) {
+                continue;
+            }
+
+            if (isTriggerManifest) {
+                const tableMatch = line.match(/^table=(\S+)$/);
+                if (tableMatch) {
+                    triggerTable = tableMatch[1];
+                }
+                continue;
+            }
+
+            const totalMatch = line.match(/^data=total,(\d+)$/);
+            if (totalMatch) {
+                total = parseInt(totalMatch[1], 10);
+                continue;
+            }
+
+            const dropMatch = line.match(/^data=drop,([a-zA-Z0-9_]+),(\d+),(\d+)$/);
+            if (dropMatch) {
+                rows.push({ kind: 'drop', item: dropMatch[1], quantity: parseInt(dropMatch[2], 10), weight: parseInt(dropMatch[3], 10) });
+                continue;
+            }
+
+            const subtableMatch = line.match(/^data=subtable,([a-zA-Z0-9_]+),(\d+)$/);
+            if (subtableMatch) {
+                rows.push({ kind: 'subtable', table: subtableMatch[1], weight: parseInt(subtableMatch[2], 10) });
+                continue;
+            }
+
+            const guaranteedMatch = line.match(/^data=guaranteed,([a-zA-Z0-9_]+),(\d+)$/);
+            if (guaranteedMatch) {
+                rows.push({ kind: 'guaranteed', item: guaranteedMatch[1], quantity: parseInt(guaranteedMatch[2], 10) });
+            }
+        }
+
+        commit();
+    }
+
+    return { tables, triggers };
+}
+
+type FlatDrop = {
+    item: string;
+    quantity: number;
+    numerator: bigint;
+    denominator: bigint;
+};
+
+// Recursively composes subtable references into a flat list of (item, exact
+// fraction-of-a-kill) pairs, memoizing each table's result so a shared
+// subtable (~randomherb etc.) is only computed once no matter how many
+// pilot NPCs reference it.
+function flattenTable(tables: Map<string, DropTable>, name: string, memo: Map<string, FlatDrop[]>): FlatDrop[] {
+    const cached = memo.get(name);
+    if (cached) {
+        return cached;
+    }
+
+    const table = tables.get(name);
+    if (!table || table.total <= 0) {
+        memo.set(name, []);
+        return [];
+    }
+
+    const result: FlatDrop[] = [];
+    const totalBig = BigInt(table.total);
+
+    for (const row of table.rows) {
+        if (row.kind === 'drop') {
+            result.push({ item: row.item, quantity: row.quantity, numerator: BigInt(row.weight), denominator: totalBig });
+        } else if (row.kind === 'subtable') {
+            const nested = flattenTable(tables, row.table, memo);
+            for (const drop of nested) {
+                result.push({
+                    item: drop.item,
+                    quantity: drop.quantity,
+                    numerator: drop.numerator * BigInt(row.weight),
+                    denominator: drop.denominator * totalBig
+                });
+            }
+        }
+    }
+
+    memo.set(name, result);
+    return result;
+}
+
+function gcdBig(a: bigint, b: bigint): bigint {
+    a = a < 0n ? -a : a;
+    b = b < 0n ? -b : b;
+
+    while (b) {
+        [a, b] = [b, a % b];
+    }
+
+    return a === 0n ? 1n : a;
+}
+
+type NpcConfig = {
+    debugname: string;
+    name: string | null;
+    category: string | null;
+};
+
+// See walkAllFiles()'s comment: intentionally includes `_unpack/` dumps.
+function loadAllNpcConfigs(): Map<string, NpcConfig> {
+    const result = new Map<string, NpcConfig>();
+    const files: string[] = [];
+    walkAllFiles(path.join(contentRoot(), 'scripts'), '.npc', files);
+
+    for (const file of files) {
+        const lines = fs.readFileSync(file, 'ascii').split(/\r?\n/);
+        let currentDebugname: string | null = null;
+        let name: string | null = null;
+        let category: string | null = null;
+
+        const commit = () => {
+            if (currentDebugname && !result.has(currentDebugname)) {
+                result.set(currentDebugname, { debugname: currentDebugname, name, category });
+            }
+        };
+
+        for (const raw of lines) {
+            const line = raw.trim();
+            const sectionMatch = line.match(/^\[([a-zA-Z0-9_]+)\]$/);
+            if (sectionMatch) {
+                commit();
+                currentDebugname = sectionMatch[1];
+                name = null;
+                category = null;
+                continue;
+            }
+
+            if (!currentDebugname) {
+                continue;
+            }
+
+            if (line.startsWith('name=')) {
+                name = line.slice('name='.length).trim();
+                continue;
+            }
+
+            if (line.startsWith('category=')) {
+                category = line.slice('category='.length).trim();
+            }
+        }
+
+        commit();
+    }
+
+    return result;
+}
+
+type ResolvedTriggerSource = {
+    label: string;
+    debugnames: string[];
+};
+
+// Category-trigger resolution per CONTEXT.md's "NPC AI/drop table dispatch":
+// an underscore-prefixed trigger key is category-based - strip the
+// underscore and collect every debugname whose .npc `category=` line
+// matches that name. A non-underscore key is the debugname itself.
+//
+// CONTEXT.md's mechanism additionally describes looking the stripped name up
+// in content/pack/category.pack to get its category id before the grep. That
+// id is unused by the grep itself (.npc `category=` lines already store the
+// plain name, not the id) and category.pack is a *generated*, gitignored
+// pack file - unlike npc.pack/obj.pack, which this file's other loaders
+// already depend on, it does not exist in a fresh checkout until `npm run
+// build` has produced it once. Skipping that lookup keeps this parser
+// dependency-free (matching the "no cache/pack dependency" requirement) and
+// costs no real validation: an unknown/misspelled category name simply
+// collects zero debugnames below and is treated as unresolved.
+function resolveTriggerKey(triggerKey: string, npcConfigs: Map<string, NpcConfig>): ResolvedTriggerSource | null {
+    if (triggerKey.startsWith('_')) {
+        const categoryName = triggerKey.slice(1);
+
+        const debugnames: string[] = [];
+        for (const config of npcConfigs.values()) {
+            if (config.category === categoryName) {
+                debugnames.push(config.debugname);
+            }
+        }
+
+        if (debugnames.length === 0) {
+            return null;
+        }
+
+        return { label: prettify(categoryName), debugnames };
+    }
+
+    const config = npcConfigs.get(triggerKey);
+    if (!config) {
+        return null;
+    }
+
+    return { label: config.name ?? prettify(triggerKey), debugnames: [triggerKey] };
+}
+
+function buildNpcDropSources(npcSpawns: Map<string, NpcLocation[]>, labels: MapLabel[]): { dropsByItem: Map<string, NpcDropSource[]>; dropsByNpc: Map<string, NpcDropSource[]> } {
+    const dropsByItem = new Map<string, NpcDropSource[]>();
+    const dropsByNpc = new Map<string, NpcDropSource[]>();
+
+    const { tables, triggers } = loadDropTables();
+    const npcConfigs = loadAllNpcConfigs();
+    const flattenMemo = new Map<string, FlatDrop[]>();
+
+    for (const [triggerKey, tableName] of triggers) {
+        const resolved = resolveTriggerKey(triggerKey, npcConfigs);
+        if (!resolved) {
+            continue;
+        }
+
+        const table = tables.get(tableName);
+        if (!table) {
+            continue;
+        }
+
+        // pool spawn locations across every member debugname, then group by
+        // nearest map label - one row per (source, area) pair, not one row
+        // per debugname or per raw coordinate
+        const pooledLocations: NpcLocation[] = [];
+        for (const debugname of resolved.debugnames) {
+            pooledLocations.push(...(npcSpawns.get(debugname) ?? []));
+        }
+
+        const byArea = new Map<string | null, NpcLocation[]>();
+        for (const location of pooledLocations) {
+            const area = nearestLabel(labels, location.x, location.z);
+            const list = byArea.get(area) ?? [];
+            list.push(location);
+            byArea.set(area, list);
+        }
+
+        if (byArea.size === 0) {
+            byArea.set(null, []);
+        }
+
+        const emit = (item: string, quantity: number, numerator: bigint, denominator: bigint, guaranteed: boolean) => {
+            const reducedGcd = guaranteed ? 1n : gcdBig(numerator, denominator);
+            const reducedNumerator = guaranteed ? 1n : numerator / reducedGcd;
+            const reducedDenominator = guaranteed ? 1n : denominator / reducedGcd;
+            const chance = guaranteed ? 1 : Number(numerator) / Number(denominator);
+            const rate = guaranteed ? 'Always' : `${reducedNumerator}/${reducedDenominator}`;
+
+            for (const [area, locations] of byArea) {
+                const source: NpcDropSource = {
+                    item: prettify(item),
+                    quantity,
+                    chance,
+                    rate,
+                    source: resolved.label,
+                    triggerKey,
+                    npcDebugnames: resolved.debugnames,
+                    area,
+                    locations
+                };
+
+                const byItemList = dropsByItem.get(item) ?? [];
+                byItemList.push(source);
+                dropsByItem.set(item, byItemList);
+
+                for (const debugname of resolved.debugnames) {
+                    const byNpcList = dropsByNpc.get(debugname) ?? [];
+                    byNpcList.push(source);
+                    dropsByNpc.set(debugname, byNpcList);
+                }
+            }
+        };
+
+        for (const row of table.rows) {
+            if (row.kind === 'guaranteed') {
+                emit(row.item, row.quantity, 1n, 1n, true);
+            }
+        }
+
+        for (const drop of flattenTable(tables, tableName, flattenMemo)) {
+            emit(drop.item, drop.quantity, drop.numerator, drop.denominator, false);
+        }
+    }
+
+    for (const list of dropsByItem.values()) {
+        list.sort((a, b) => b.chance - a.chance);
+    }
+    for (const list of dropsByNpc.values()) {
+        list.sort((a, b) => b.chance - a.chance);
+    }
+
+    return { dropsByItem, dropsByNpc };
+}
+
 function buildIndex(): ItemIndex {
     const objNames = loadObjNames();
     const npcNames = loadNpcNames();
     const labels = loadLabels();
     const shopInfo = loadShopInfo(npcNames);
+    const npcSpawns = loadNpcSpawns(npcNames);
+    const { dropsByItem, dropsByNpc } = buildNpcDropSources(npcSpawns, labels);
 
     return {
         shopsByItem: loadShopSources(shopInfo),
-        spawnsByItem: loadGroundSpawns(objNames, labels)
+        spawnsByItem: loadGroundSpawns(objNames, labels),
+        dropsByItem,
+        dropsByNpc
     };
 }
 
@@ -485,12 +894,12 @@ export function getItemSourceIndex(forceRebuild = false): ItemIndex {
     return cachedIndex;
 }
 
-export function searchItemSources(query: string): { shops: ShopSource[]; groundSpawns: GroundSpawnSource[] } {
+export function searchItemSources(query: string): { shops: ShopSource[]; groundSpawns: GroundSpawnSource[]; drops: NpcDropSource[] } {
     const index = getItemSourceIndex();
     const needle = query.trim().toLowerCase().replace(/_/g, ' ');
 
     if (!needle) {
-        return { shops: [], groundSpawns: [] };
+        return { shops: [], groundSpawns: [], drops: [] };
     }
 
     const matchedNames = new Set<string>();
@@ -504,13 +913,20 @@ export function searchItemSources(query: string): { shops: ShopSource[]; groundS
             matchedNames.add(name);
         }
     }
+    for (const name of index.dropsByItem.keys()) {
+        if (name.toLowerCase().replace(/_/g, ' ').includes(needle)) {
+            matchedNames.add(name);
+        }
+    }
 
     const shops: ShopSource[] = [];
     const groundSpawns: GroundSpawnSource[] = [];
+    const drops: NpcDropSource[] = [];
 
     for (const name of matchedNames) {
         shops.push(...(index.shopsByItem.get(name) ?? []));
         groundSpawns.push(...(index.spawnsByItem.get(name) ?? []));
+        drops.push(...(index.dropsByItem.get(name) ?? []));
     }
 
     // sorted alphabetically by resolved area name first (issue #54), so results read
@@ -528,6 +944,13 @@ export function searchItemSources(query: string): { shops: ShopSource[]; groundS
         const areaB = b.area ?? '￿';
         return areaA.localeCompare(areaB) || a.item.localeCompare(b.item) || a.x - b.x || a.z - b.z || a.level - b.level || a.quantity - b.quantity;
     });
+    // highest-chance drop first (guaranteed drops sort to the top), then alphabetically
+    // by source/area for a stable order among ties
+    drops.sort((a, b) => {
+        const areaA = a.area ?? '￿';
+        const areaB = b.area ?? '￿';
+        return b.chance - a.chance || a.source.localeCompare(b.source) || areaA.localeCompare(areaB) || a.item.localeCompare(b.item);
+    });
 
-    return { shops, groundSpawns };
+    return { shops, groundSpawns, drops };
 }

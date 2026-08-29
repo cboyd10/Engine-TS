@@ -39,8 +39,8 @@
 
 <% if (!results) { %>
     <p class="emptynote">Enter an item name above to search.</p>
-<% } else if (results.shops.length === 0 && results.groundSpawns.length === 0) { %>
-    <p class="emptynote">No shop stock or ground spawns found for "<%= query %>". (Drop-table sources aren't indexed yet.)</p>
+<% } else if (results.shops.length === 0 && results.groundSpawns.length === 0 && results.drops.length === 0) { %>
+    <p class="emptynote">No shop stock, ground spawns, or NPC drops found for "<%= query %>".</p>
 <% } else { %>
     <div class="sectiontitle"><b>Shop Stock</b></div>
     <% if (results.shops.length === 0) { %>
@@ -110,15 +110,52 @@
         </table>
     <% } %>
 
+    <div class="sectiontitle"><b>NPC Drop Sources</b></div>
+    <% if (results.drops.length === 0) { %>
+        <p class="emptynote">No NPC drops this item (only the pilot set of 7 NPCs is indexed so far).</p>
+    <% } else { %>
+        <table class="rs-table">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>NPC</th>
+                    <th>Rate</th>
+                    <th class="numeric">Qty</th>
+                    <th>Area</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <% results.drops.forEach(function(row) { %>
+                    <tr>
+                        <td><%= row.item %></td>
+                        <td><%= row.source %></td>
+                        <td><%= row.rate %></td>
+                        <td class="numeric"><%= row.quantity %></td>
+                        <td><%= row.area ?? 'Unknown area' %></td>
+                        <td>
+                            <% if (row.locations.length > 0) { %>
+                                <a class="c" href="#map" onclick="focusMap(<%= row.locations[0].x %>, <%= row.locations[0].z %>); return false;">Show on Map</a>
+                            <% } else { %>
+                                <span class="map-link-disabled">No known location</span>
+                            <% } %>
+                        </td>
+                    </tr>
+                <% }); %>
+            </tbody>
+        </table>
+    <% } %>
+
     <%
         const itemMarkers = results.groundSpawns.map(r => ({ x: r.x, z: r.z }));
         const npcMarkers = [];
         results.shops.forEach(s => s.locations.forEach(l => npcMarkers.push({ x: l.x, z: l.z })));
+        results.drops.forEach(d => d.locations.forEach(l => npcMarkers.push({ x: l.x, z: l.z })));
         const initialCenter = itemMarkers[0] || npcMarkers[0] || null;
     %>
 
     <div class="sectiontitle" id="map"><b>Map</b></div>
-    <p class="emptynote" style="margin: 0 0 8px;">Red dots are ground spawns, yellow dots are shop npcs. Click a "Show on Map" link above to re-center.</p>
+    <p class="emptynote" style="margin: 0 0 8px;">Red dots are ground spawns, yellow dots are NPCs (shop owners and drop sources). Click a "Show on Map" link above to re-center.</p>
     <center>
     <div class="canvas-frame">
         <canvas id="canvas" width="860" height="560"></canvas>
