@@ -112,15 +112,17 @@
 
     <div class="sectiontitle"><b>NPC Drop Sources</b></div>
     <% if (results.drops.length === 0) { %>
-        <p class="emptynote">No NPC drops this item (only the pilot set of 7 NPCs is indexed so far).</p>
+        <p class="emptynote">No NPC drops this item.</p>
     <% } else { %>
         <table class="rs-table">
             <thead>
                 <tr>
                     <th>Item</th>
                     <th>NPC</th>
+                    <th class="numeric">Combat Level</th>
                     <th>Rate</th>
                     <th class="numeric">Qty</th>
+                    <th class="numeric">Spawns</th>
                     <th>Area</th>
                     <th></th>
                 </tr>
@@ -130,8 +132,10 @@
                     <tr>
                         <td><%= row.item %></td>
                         <td><%= row.source %></td>
+                        <td class="numeric"><%= row.combatLevel ?? '-' %></td>
                         <td><%= row.rate %></td>
                         <td class="numeric"><%= row.quantity %></td>
+                        <td class="numeric"><%= row.locations.length %></td>
                         <td><%= row.area ?? 'Unknown area' %></td>
                         <td>
                             <% if (row.locations.length > 0) { %>
