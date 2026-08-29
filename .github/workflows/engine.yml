@@ -21,23 +21,15 @@ jobs:
       with:
         path: engine
 
-    # ItemSourceIndex.ts's tests (issue #57) read real content data via
+    # ItemSourceIndex.ts's tests read real content data via
     # Environment.build.srcDir, which defaults to '../content' - checking
     # content out as a sibling of engine/ here (same layout Content's own
     # "Verify Content" workflow uses) satisfies that with no extra config.
-    #
-    # Pinned to this PR's own content branch (cboyd10/Content#7), not
-    # `gamenight`, because that branch is what carries the new pilot
-    # .dropdata files this PR's tests read - `gamenight` won't have them
-    # until #7 merges. Mirrors the same hardcoded-ref tradeoff Content's own
-    # `Verify Content` workflow makes for Engine-TS (see CONTEXT.md's
-    # "Content CI's hardcoded Engine ref" note): safe to flip back to
-    # `gamenight` once cboyd10/Content#7 merges.
     - name: Clone Content
       uses: actions/checkout@v6
       with:
         repository: cboyd10/Content
-        ref: issue-57-npc-drop-sources
+        ref: gamenight
         path: content
 
     - uses: actions/setup-node@v6
