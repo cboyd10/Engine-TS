@@ -32,7 +32,7 @@ async function updateHiscores(account: { id: number; banned_until: string | null
             continue;
         }
 
-        totalXp += player.stats[i];
+        totalXp += (player.stats[i] / 10) | 0;
         totalLevel += player.baseLevels[i];
     }
 
@@ -69,14 +69,15 @@ async function updateHiscores(account: { id: number; banned_until: string | null
         }
 
         const hiscoreType = stat + 1;
+        const xp = (player.stats[stat] / 10) | 0;
 
         // todo: can we upsert in kysely?
         const existing = await db.selectFrom('hiscore').select('type').select('value').where('account_id', '=', account.id).where('type', '=', hiscoreType).where('profile', '=', profile).executeTakeFirst();
-        if (existing && existing.value !== player.stats[stat]) {
+        if (existing && existing.value !== xp) {
             update.push({
                 type: hiscoreType,
                 level: player.baseLevels[stat],
-                value: player.stats[stat],
+                value: xp,
                 date: toDbDate(new Date())
             });
         } else if (!existing) {
@@ -85,7 +86,7 @@ async function updateHiscores(account: { id: number; banned_until: string | null
                 profile,
                 type: hiscoreType,
                 level: player.baseLevels[stat],
-                value: player.stats[stat]
+                value: xp
             });
         }
     }
