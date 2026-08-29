@@ -17,12 +17,23 @@ import path from 'path';
 
 import { loadAllNpcConfigs, loadDropTables, loadLabels, loadNpcNames, loadNpcSpawns, nearestLabel, resolveTriggerKey, type NpcConfig, type NpcLocation } from '#/util/ItemSourceIndex.js';
 
+// Resolves to the commit this audit's actual game-data/parsing inputs came
+// from - the gamenight tip this issue's branch forked from in each submodule,
+// not this branch's own tip. Using the branch tip here would be
+// self-referential once this report file itself is committed (the commit's
+// hash depends on the file's contents, which would depend on the commit's
+// hash), and it isn't the interesting number anyway: this audit's own commits
+// only add a report/tool, they don't change any .npc/.jm2/pack data or
+// resolveTriggerKey()'s resolution behavior.
 function gitCommit(cwd: string): string | null {
-    try {
-        return execSync('git rev-parse HEAD', { cwd, encoding: 'ascii' }).trim();
-    } catch {
-        return null;
+    for (const ref of ['origin/gamenight', 'HEAD']) {
+        try {
+            return execSync(`git rev-parse ${ref}`, { cwd, encoding: 'ascii', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+        } catch {
+            continue;
+        }
     }
+    return null;
 }
 
 function areasFor(locations: NpcLocation[], labels: ReturnType<typeof loadLabels>): string[] {
@@ -112,9 +123,13 @@ function main() {
     lines.push('');
     lines.push('## Derived from');
     lines.push('');
-    lines.push(`- Meta-repo (\`cboyd10/runescape\`) commit: \`${metaCommit ?? 'unknown'}\``);
-    lines.push(`- \`content\` submodule commit: \`${contentCommit ?? 'unknown'}\``);
-    lines.push(`- \`engine\` submodule commit: \`${engineCommit ?? 'unknown'}\``);
+    lines.push(
+        "Game data (`.npc`/`.jm2`/`pack/*.pack`) and resolution logic (`resolveTriggerKey()`) as of each submodule's `gamenight` tip this issue's work branched from - not this audit's own commits, which only add tooling/report files and don't change either:"
+    );
+    lines.push('');
+    lines.push(`- Meta-repo (\`cboyd10/runescape\`) base commit: \`${metaCommit ?? 'unknown'}\``);
+    lines.push(`- \`content\` submodule (\`gamenight\`) commit: \`${contentCommit ?? 'unknown'}\``);
+    lines.push(`- \`engine\` submodule (\`gamenight\`) commit: \`${engineCommit ?? 'unknown'}\``);
     lines.push('');
     lines.push('## Summary');
     lines.push('');
@@ -123,9 +138,17 @@ function main() {
     lines.push(`- Gap (attackable, spawned, uncovered): **${gap.length}**`);
     lines.push(`- Attackable but unspawned (excluded from the gap, listed separately below): **${unspawned.length}**`);
     lines.push('');
-    lines.push(
-        `Spot-check: ${spotCheck.map(n => `\`${n}\``).join(', ')} ${missingFromSpotCheck.length === 0 ? 'all confirmed present in the gap list below.' : `- **MISSING from gap**: ${missingFromSpotCheck.map(n => `\`${n}\``).join(', ')} (see note above).`}`
-    );
+    lines.push(`Spot-check: ${spotCheck.map(n => `\`${n}\``).join(', ')} ${missingFromSpotCheck.length === 0 ? 'all confirmed present in the gap list below.' : `- **MISSING from gap**: ${missingFromSpotCheck.map(n => `\`${n}\``).join(', ')}.`}`);
+    if (missingFromSpotCheck.length > 0) {
+        lines.push('');
+        for (const name of missingFromSpotCheck) {
+            const stillAttackable = npcConfigs.get(name)?.attackable === true;
+            const spawnCount = npcSpawns.get(name)?.length ?? 0;
+            lines.push(
+                `> **Note on \`${name}\`:** issue #79 identified this debugname as likely-missing during scoping, but at this audit's commit it has \`attackable = ${stillAttackable}\` and **${spawnCount} spawn location(s)** in the current map data - i.e. it is genuinely unspawned right now (its AI/attack scripts in \`content/scripts/npc/scripts/dragon.rs2\` are commented out), not merely uncovered. Per this issue's own acceptance criteria ("attackable debugnames with zero spawn locations... are excluded from the reported gap"), it is correctly listed under "Unspawned, skipped for now" below rather than in the gap list - flagging this rather than special-casing it into the gap, since a future map/content change that adds a real spawn would then need this audit re-run anyway.`
+            );
+        }
+    }
     lines.push('');
     lines.push('## Gap list');
     lines.push('');
