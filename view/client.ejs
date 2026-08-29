@@ -24,6 +24,12 @@
             margin: 0px 0px;
             overflow: auto;
             background-color: black;
+            /* custom: horizontal flex row so an injected #plugin-sidebar (see
+               PluginSidebar.ts, appended directly to body) renders beside the
+               game column instead of stacking below it -- no JS layout hacks. */
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
         }
 
         center {
@@ -33,6 +39,11 @@
             align-items: center;
             min-height: 100vh;
             box-sizing: border-box;
+            /* custom: consume all width not claimed by #plugin-sidebar, so the
+               existing margin:auto-based centering still works inside body's
+               new flex row. */
+            flex: 1 1 auto;
+            min-width: 0;
         }
 
         #game {
@@ -142,7 +153,10 @@
                     document.msExitFullscreen();
                 }
             } else {
-                let element = document.getElementById('canvas');
+                // custom: fullscreen the whole body (game column + injected
+                // plugin sidebar), not just the canvas -- otherwise the
+                // Fullscreen API drops the sidebar and its click handling.
+                let element = document.body;
 
                 if (element.requestFullscreen) {
                     element.requestFullscreen();
@@ -239,7 +253,10 @@
                 }
             } else {
                 let size = localStorage.getItem('canvasSize');
-                if (size) { setSize(size); }
+                // custom: default first-time visitors (no saved preference
+                // yet) to auto sizing instead of the CSS-declared 765x503
+                // canvas default.
+                setSize(size || 'auto');
 
                 let controls = localStorage.getItem('hideControls');
                 if (controls === 'true') { hideControls(); }
@@ -283,7 +300,13 @@
                     }
 
                     const availableHeight = window.innerHeight - reservedHeight;
-                    const availableWidth = window.innerWidth;
+                    // custom: subtract the injected plugin sidebar's current
+                    // width (40px icon column, +225px more while a content
+                    // panel is open) so the canvas never renders clipped by
+                    // or under it. window.pluginBridge is populated by
+                    // Client.ts once the module script constructs Client.
+                    const sidebarWidth = (window.pluginBridge && window.pluginBridge.getSidebarWidth) ? window.pluginBridge.getSidebarWidth() : 0;
+                    const availableWidth = window.innerWidth - sidebarWidth;
 
                     // Canvas aspect ratio (765:503)
                     const aspectRatio = 765 / 503;
