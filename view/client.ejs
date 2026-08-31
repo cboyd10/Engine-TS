@@ -251,6 +251,17 @@
                     // Unset choice = hybrid
                     keyboardChoiceElement.value = 'hybrid';
                 }
+
+                // custom (issue #73): mobile always forces auto-sizing,
+                // ignoring any stale 1x/2x/3x preference saved from a prior
+                // desktop visit (or from before this fix existed) -- fixed
+                // multiples don't make sense on a phone screen. The size
+                // <select> itself is hidden below since there's no reason to
+                // offer that choice on mobile.
+                setSize('auto');
+
+                const sizeContainerElement = document.getElementById('size-container');
+                if (sizeContainerElement) { sizeContainerElement.style.display = 'none'; }
             } else {
                 let size = localStorage.getItem('canvasSize');
                 // custom: default first-time visitors (no saved preference
@@ -316,15 +327,33 @@
                     const scaleByWidth = availableWidth / 765;
 
                     // Use the smaller scale to ensure it fits in both directions
-                    const scale = Math.min(scaleByHeight, scaleByWidth);
+                    let scale = Math.min(scaleByHeight, scaleByWidth);
+
+                    // custom (issue #73): never shrink the canvas below its
+                    // native size on mobile, so tap targets stay usable --
+                    // even if that means the canvas overflows the viewport
+                    // (the page is scrollable via body's existing
+                    // "overflow: auto" rule). Desktop behavior is unchanged.
+                    if (isMobile()) {
+                        scale = Math.max(scale, 1.0);
+                    }
 
                     canvas.style.width = (765 * scale) + 'px';
                     canvas.style.height = (503 * scale) + 'px';
-                    canvas.style.maxWidth = '100vw';
-                    canvas.style.maxHeight = availableHeight + 'px';
+                    if (isMobile()) {
+                        // Don't let the max-height/width clamp re-shrink the
+                        // floored size back down when it's larger than the
+                        // available viewport space.
+                        canvas.style.maxWidth = 'none';
+                        canvas.style.maxHeight = 'none';
+                    } else {
+                        canvas.style.maxWidth = '100vw';
+                        canvas.style.maxHeight = availableHeight + 'px';
+                    }
                     break;
             }
-            document.getElementById('size').value = size;
+            const sizeSelectElement = document.getElementById('size');
+            if (sizeSelectElement) { sizeSelectElement.value = size; }
             localStorage.setItem('canvasSize', size);
         }
 
@@ -364,14 +393,16 @@
         </div>
 
         <div class="centered" id="controls">
-            <select id="size" name="size" onchange="setSize();">
-                <optgroup>
-                    <option value="1" id="1">1x Size</option>
-                    <option value="2" id="2">2x Size</option>
-                    <option value="3" id="3">3x Size</option>
-                    <option value="auto" id="auto">Auto Sizing</option>
-                </optgroup>
-            </select> |
+            <span id="size-container">
+                <select id="size" name="size" onchange="setSize();">
+                    <optgroup>
+                        <option value="1" id="1">1x Size</option>
+                        <option value="2" id="2">2x Size</option>
+                        <option value="3" id="3">3x Size</option>
+                        <option value="auto" id="auto">Auto Sizing</option>
+                    </optgroup>
+                </select> |
+            </span>
             <select id="filtering" name="filtering" onchange="setFilter('dropdown');">
                 <optgroup>
                     <option value="auto" id="auto">Auto Scaling</option>
