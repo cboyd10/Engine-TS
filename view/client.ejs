@@ -124,6 +124,28 @@
         #mobilekeyboard-container {
             display: none;
         }
+
+        #rotate-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            box-sizing: border-box;
+            background-color: black;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 24px;
+            z-index: 1000;
+        }
+
+        #rotate-overlay p {
+            margin: 0;
+            max-width: 80vw;
+        }
     </style>
 
     <script>
@@ -159,14 +181,40 @@
                 let element = document.body;
 
                 if (element.requestFullscreen) {
-                    element.requestFullscreen();
+                    // custom (issue #76): requestFullscreen() is the one
+                    // reliable user-gesture context screen.orientation.lock()
+                    // needs to succeed on browsers that support it (Android
+                    // Chrome) -- chain onto its promise so the lock is only
+                    // attempted once fullscreen has actually taken effect.
+                    const result = element.requestFullscreen();
+                    if (result && typeof result.then === 'function') {
+                        result.then(lockLandscapeOrientation).catch(function () { });
+                    } else {
+                        lockLandscapeOrientation();
+                    }
                 } else if (element.webkitRequestFullscreen) {
                     element.webkitRequestFullscreen();
+                    lockLandscapeOrientation();
                 } else if (element.mozRequestFullScreen) {
                     element.mozRequestFullScreen();
+                    lockLandscapeOrientation();
                 } else if (element.msRequestFullscreen) {
                     element.msRequestFullscreen();
+                    lockLandscapeOrientation();
                 }
+            }
+        }
+
+        // custom (issue #76): opportunistic orientation lock for the subset
+        // of browsers that support it (Android Chrome, in fullscreen) --
+        // iOS Safari has no screen.orientation.lock API at all, so this is a
+        // bonus on top of the #rotate-overlay soft prompt below, never the
+        // only mechanism. Feature-checked and its rejection swallowed so an
+        // unsupported/disallowed lock never throws or undoes the fullscreen
+        // transition that already succeeded.
+        function lockLandscapeOrientation() {
+            if (typeof screen.orientation?.lock === 'function') {
+                screen.orientation.lock('landscape').catch(function () { });
             }
         }
 
@@ -236,8 +284,20 @@
             }
         });
 
+        // custom (issue #76): shows/hides the full-viewport rotate prompt.
+        // Gated on isMobile() (not just the orientation media query alone) so
+        // a narrow desktop browser window is never mistaken for a phone.
+        function updateRotateOverlay() {
+            const overlay = document.getElementById('rotate-overlay');
+            if (!overlay) { return; }
+
+            const isPortrait = window.matchMedia('(orientation: portrait)').matches;
+            overlay.style.display = (isMobile() && isPortrait) ? 'flex' : 'none';
+        }
+
         function loadSettings() {
             setFilter((localStorage.getItem('filtering') == 'true') ? 'pixelated' : 'auto');
+            updateRotateOverlay();
             if (isMobile()) {
                 const keyboardChoiceContainerElement = document.getElementById('mobilekeyboard-container');
                 const keyboardChoiceElement = document.getElementById('mobilekeyboard');
@@ -362,7 +422,23 @@
             if (size === 'auto') {
                 setSize('auto');
             }
+            updateRotateOverlay();
         });
+
+        // custom (issue #76): matchMedia's change event is the reliable
+        // orientation-change signal (fires promptly on rotation, no reload
+        // needed); the resize listener above is a redundant backstop for
+        // browsers/timings where only a resize fires.
+        if (window.matchMedia) {
+            const portraitQuery = window.matchMedia('(orientation: portrait)');
+            if (portraitQuery.addEventListener) {
+                portraitQuery.addEventListener('change', updateRotateOverlay);
+            } else if (portraitQuery.addListener) {
+                // Safari < 14 fallback -- addEventListener on MediaQueryList
+                // is not supported there.
+                portraitQuery.addListener(updateRotateOverlay);
+            }
+        }
 
         function setFilter(type) {
             let canvas = document.getElementById('canvas');
@@ -390,6 +466,10 @@
             <canvas id="canvas" width="765" height="503">
                 Your browser is not capable of running our web client.
             </canvas>
+        </div>
+
+        <div id="rotate-overlay">
+            <p class="green blink">Please rotate your device to landscape to play.</p>
         </div>
 
         <div class="centered" id="controls">
