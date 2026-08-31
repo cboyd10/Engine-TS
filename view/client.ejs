@@ -7,6 +7,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=0.7">
 
+    <!-- PWA install support (issue #74): manifest + icons for "Add to Home
+         Screen"/"Install app". apple-touch-icon is required separately from
+         the manifest because iOS Safari does not read icons from it. -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/pwa/icon-192.png">
+    <meta name="theme-color" content="#04A800">
+
     <style>
         html {
             touch-action: manipulation;
@@ -421,6 +428,16 @@
         })();
 
         loadSettings();
+    </script>
+
+    <script>
+        // PWA install support (issue #74). Registration failure (e.g. dev
+        // server without HTTPS/localhost) must never block page load.
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(err => {
+                console.error('service worker registration failed', err);
+            });
+        }
     </script>
 </body>
 
