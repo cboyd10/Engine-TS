@@ -50,11 +50,42 @@ export type MapLabel = {
     level: number;
 };
 
+// One area-grouped row of an NPC's own spawn locations (issue #102's /npc
+// page) - the same "one row per (source, area) pair" convention
+// buildNpcDropSources() already uses for drop-source rows.
+export type NpcSpawnArea = {
+    area: string | null;
+    locations: NpcLocation[];
+};
+
+// One structurally distinct drop-table grouping for a display name (issue
+// #102's same-name/different-table edge case - e.g. "Dark wizard" covering
+// both bearded_dark_wizard's and young_dark_wizard's separate tables).
+// triggerKey identifies which grouping; length 1 is the common case.
+export type NpcDropGroup = {
+    triggerKey: string;
+    combatLevel: number | string | null;
+    drops: NpcDropSource[];
+};
+
+export type NpcSearchResult = {
+    name: string;
+    dropGroups: NpcDropGroup[];
+    spawnAreas: NpcSpawnArea[];
+};
+
 type ItemIndex = {
     shopsByItem: Map<string, ShopSource[]>;
     spawnsByItem: Map<string, GroundSpawnSource[]>;
     dropsByItem: Map<string, NpcDropSource[]>;
     dropsByNpc: Map<string, NpcDropSource[]>;
+    // every real .npc display name in the game (issue #102's /npc search
+    // universe), not just drop- or spawn-covered ones
+    npcDisplayNames: string[];
+    // an NPC display name's own spawn locations, pooled across every
+    // debugname sharing that name and grouped by nearest map label - the
+    // same partitioning buildNpcDropSources() applies to drop sources
+    npcSpawnAreasByName: Map<string, NpcSpawnArea[]>;
 };
 
 let cachedIndex: ItemIndex | null = null;
@@ -827,12 +858,11 @@ export function resolveTriggerKey(triggerKey: string, npcConfigs: Map<string, Np
     return { label: config.name ?? prettify(triggerKey), debugnames: [triggerKey] };
 }
 
-function buildNpcDropSources(npcSpawns: Map<string, NpcLocation[]>, labels: MapLabel[]): { dropsByItem: Map<string, NpcDropSource[]>; dropsByNpc: Map<string, NpcDropSource[]> } {
+function buildNpcDropSources(npcSpawns: Map<string, NpcLocation[]>, labels: MapLabel[], npcConfigs: Map<string, NpcConfig>): { dropsByItem: Map<string, NpcDropSource[]>; dropsByNpc: Map<string, NpcDropSource[]> } {
     const dropsByItem = new Map<string, NpcDropSource[]>();
     const dropsByNpc = new Map<string, NpcDropSource[]>();
 
     const { tables, triggers } = loadDropTables();
-    const npcConfigs = loadAllNpcConfigs();
     const flattenMemo = new Map<string, FlatDrop[]>();
 
     for (const [triggerKey, tableName] of triggers) {
@@ -944,19 +974,58 @@ function buildNpcDropSources(npcSpawns: Map<string, NpcLocation[]>, labels: MapL
     return { dropsByItem, dropsByNpc };
 }
 
+// Pools npcSpawns' raw per-debugname locations by each debugname's real
+// in-game display name (same partitioning buildNpcDropSources() applies to
+// drop sources), then groups each name's pooled locations by nearest map
+// label - one row per (name, area) pair, matching the drop-source
+// convention. Used by the /npc page (issue #102) to show an NPC's own
+// spawn locations under its display name, independent of drop coverage.
+function buildNpcSpawnAreasByName(npcSpawns: Map<string, NpcLocation[]>, npcConfigs: Map<string, NpcConfig>, labels: MapLabel[]): Map<string, NpcSpawnArea[]> {
+    const pooledByName = new Map<string, NpcLocation[]>();
+    for (const [debugname, locations] of npcSpawns) {
+        const displayName = npcConfigs.get(debugname)?.name ?? prettify(debugname);
+        const list = pooledByName.get(displayName) ?? [];
+        list.push(...locations);
+        pooledByName.set(displayName, list);
+    }
+
+    const result = new Map<string, NpcSpawnArea[]>();
+    for (const [displayName, locations] of pooledByName) {
+        const byArea = new Map<string | null, NpcLocation[]>();
+        for (const location of locations) {
+            const area = nearestLabel(labels, location.x, location.z);
+            const list = byArea.get(area) ?? [];
+            list.push(location);
+            byArea.set(area, list);
+        }
+
+        result.set(
+            displayName,
+            [...byArea.entries()].map(([area, areaLocations]) => ({ area, locations: areaLocations }))
+        );
+    }
+
+    return result;
+}
+
 function buildIndex(): ItemIndex {
     const objNames = loadObjNames();
     const npcNames = loadNpcNames();
     const labels = loadLabels();
     const shopInfo = loadShopInfo(npcNames);
     const npcSpawns = loadNpcSpawns(npcNames);
-    const { dropsByItem, dropsByNpc } = buildNpcDropSources(npcSpawns, labels);
+    const npcConfigs = loadAllNpcConfigs();
+    const { dropsByItem, dropsByNpc } = buildNpcDropSources(npcSpawns, labels, npcConfigs);
+
+    const npcDisplayNames = [...new Set([...npcConfigs.values()].map(config => config.name ?? prettify(config.debugname)))];
 
     return {
         shopsByItem: loadShopSources(shopInfo),
         spawnsByItem: loadGroundSpawns(objNames, labels),
         dropsByItem,
-        dropsByNpc
+        dropsByNpc,
+        npcDisplayNames,
+        npcSpawnAreasByName: buildNpcSpawnAreasByName(npcSpawns, npcConfigs, labels)
     };
 }
 
@@ -1027,4 +1096,57 @@ export function searchItemSources(query: string): { shops: ShopSource[]; groundS
     });
 
     return { shops, groundSpawns, drops };
+}
+
+// Parallel to searchItemSources() (issue #102), but matched against the
+// full NPC display-name universe (every real .npc name=, from
+// npcDisplayNames) rather than just drop-/spawn-covered names - so a
+// non-combat, non-drop NPC still shows up with both sections empty.
+export function searchNpcSources(query: string): NpcSearchResult[] {
+    const index = getItemSourceIndex();
+    const needle = query.trim().toLowerCase().replace(/_/g, ' ');
+
+    if (!needle) {
+        return [];
+    }
+
+    const matchedNames = new Set<string>();
+    for (const name of index.npcDisplayNames) {
+        if (name.toLowerCase().replace(/_/g, ' ').includes(needle)) {
+            matchedNames.add(name);
+        }
+    }
+
+    const results: NpcSearchResult[] = [];
+    for (const name of matchedNames) {
+        const drops = index.dropsByNpc.get(name) ?? [];
+
+        // group by triggerKey - the same display name can cover more than
+        // one structurally distinct drop table (e.g. "Dark wizard" ->
+        // bearded_dark_wizard and young_dark_wizard, two separate
+        // [ai_queue3,...] triggers); each becomes its own subsection
+        const dropsByTrigger = new Map<string, NpcDropSource[]>();
+        for (const drop of drops) {
+            const list = dropsByTrigger.get(drop.triggerKey) ?? [];
+            list.push(drop);
+            dropsByTrigger.set(drop.triggerKey, list);
+        }
+
+        const dropGroups: NpcDropGroup[] = [...dropsByTrigger.entries()]
+            .map(([triggerKey, rows]) => ({
+                triggerKey,
+                combatLevel: rows[0].combatLevel,
+                drops: rows
+            }))
+            .sort((a, b) => b.drops.length - a.drops.length || a.triggerKey.localeCompare(b.triggerKey));
+
+        results.push({
+            name,
+            dropGroups,
+            spawnAreas: index.npcSpawnAreasByName.get(name) ?? []
+        });
+    }
+
+    results.sort((a, b) => a.name.localeCompare(b.name));
+    return results;
 }
