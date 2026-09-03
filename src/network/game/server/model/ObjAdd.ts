@@ -4,7 +4,8 @@ export default class ObjAdd extends ServerGameZoneMessage {
     constructor(
         readonly coord: number,
         readonly obj: number,
-        readonly count: number
+        readonly count: number,
+        readonly sourceNpc: number = -1
     ) {
         super(coord);
     }

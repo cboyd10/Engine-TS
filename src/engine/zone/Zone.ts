@@ -164,9 +164,9 @@ export default class Zone {
             }
             player.write(new UpdateZonePartialFollows(this.x, this.z, player.originX, player.originZ));
             if (obj.lifecycle === EntityLifeCycle.DESPAWN && obj.isActive) {
-                player.write(new ObjAdd(CoordGrid.packZoneCoord(obj.x, obj.z), obj.type, obj.count));
+                player.write(new ObjAdd(CoordGrid.packZoneCoord(obj.x, obj.z), obj.type, obj.count, obj.sourceNpc));
             } else if (obj.lifecycle === EntityLifeCycle.RESPAWN && obj.isActive) {
-                player.write(new ObjAdd(CoordGrid.packZoneCoord(obj.x, obj.z), obj.type, obj.count));
+                player.write(new ObjAdd(CoordGrid.packZoneCoord(obj.x, obj.z), obj.type, obj.count, obj.sourceNpc));
             }
         }
         for (const loc of this.getAllLocsUnsafe()) {
@@ -319,9 +319,9 @@ export default class Zone {
         obj.isActive = true;
 
         if (obj.lifecycle === EntityLifeCycle.RESPAWN || receiver64 === Obj.NO_RECEIVER) {
-            this.queueEvent(obj, new ZoneEvent(ZoneEventType.ENCLOSED, receiver64, new ObjAdd(coord, obj.type, obj.count)));
+            this.queueEvent(obj, new ZoneEvent(ZoneEventType.ENCLOSED, receiver64, new ObjAdd(coord, obj.type, obj.count, obj.sourceNpc)));
         } else if (obj.lifecycle === EntityLifeCycle.DESPAWN) {
-            this.queueEvent(obj, new ZoneEvent(ZoneEventType.FOLLOWS, receiver64, new ObjAdd(coord, obj.type, obj.count)));
+            this.queueEvent(obj, new ZoneEvent(ZoneEventType.FOLLOWS, receiver64, new ObjAdd(coord, obj.type, obj.count, obj.sourceNpc)));
         }
     }
 

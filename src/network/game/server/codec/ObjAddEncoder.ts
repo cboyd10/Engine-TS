@@ -10,5 +10,6 @@ export default class ObjAddEncoder extends ServerGameZoneMessageEncoder<ObjAdd> 
         buf.p1(message.coord);
         buf.p2(message.obj);
         buf.p2(Math.min(message.count, 65535));
+        buf.p2(message.sourceNpc);
     }
 }
