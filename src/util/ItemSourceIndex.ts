@@ -846,69 +846,91 @@ function buildNpcDropSources(npcSpawns: Map<string, NpcLocation[]>, labels: MapL
             continue;
         }
 
-        // pool spawn locations across every member debugname, then group by
-        // nearest map label - one row per (source, area) pair, not one row
-        // per debugname or per raw coordinate
-        const pooledLocations: NpcLocation[] = [];
+        // Partition the trigger's debugnames by each one's real in-game
+        // `.npc` name= display name, so a category trigger like _citizen
+        // (man/man2/man3/al_kharid_man -> "Man", woman/woman2/woman3 ->
+        // "Woman") produces one NpcDropSource group per display name
+        // instead of one group pooled under the trigger's synthetic
+        // category label ("Citizens"). A direct (non-category) trigger's
+        // single debugname still forms its own one-member partition, keyed
+        // by that debugname's own name - unaffected in shape. Two distinct
+        // triggers whose debugnames happen to share a display name (e.g.
+        // bearded_dark_wizard/young_dark_wizard, both "Dark wizard") each
+        // still add their own partition below, appending to the same
+        // dropsByNpc key - every row still carries its own npcDebugnames so
+        // a consumer (the /npc page) can split them back into subsections.
+        const partitions = new Map<string, string[]>();
         for (const debugname of resolved.debugnames) {
-            pooledLocations.push(...(npcSpawns.get(debugname) ?? []));
+            const displayName = npcConfigs.get(debugname)?.name ?? prettify(debugname);
+            const members = partitions.get(displayName) ?? [];
+            members.push(debugname);
+            partitions.set(displayName, members);
         }
 
-        const byArea = new Map<string | null, NpcLocation[]>();
-        for (const location of pooledLocations) {
-            const area = nearestLabel(labels, location.x, location.z);
-            const list = byArea.get(area) ?? [];
-            list.push(location);
-            byArea.set(area, list);
-        }
+        for (const [displayName, debugnames] of partitions) {
+            // pool spawn locations across every member debugname of this
+            // partition, then group by nearest map label - one row per
+            // (source, area) pair, not one row per debugname or per raw
+            // coordinate
+            const pooledLocations: NpcLocation[] = [];
+            for (const debugname of debugnames) {
+                pooledLocations.push(...(npcSpawns.get(debugname) ?? []));
+            }
 
-        if (byArea.size === 0) {
-            byArea.set(null, []);
-        }
+            const byArea = new Map<string | null, NpcLocation[]>();
+            for (const location of pooledLocations) {
+                const area = nearestLabel(labels, location.x, location.z);
+                const list = byArea.get(area) ?? [];
+                list.push(location);
+                byArea.set(area, list);
+            }
 
-        const combatLevel = computeCombatLevel(resolved.debugnames, npcConfigs);
+            if (byArea.size === 0) {
+                byArea.set(null, []);
+            }
 
-        const emit = (item: string, quantity: number, numerator: bigint, denominator: bigint, guaranteed: boolean) => {
-            const reducedGcd = guaranteed ? 1n : gcdBig(numerator, denominator);
-            const reducedNumerator = guaranteed ? 1n : numerator / reducedGcd;
-            const reducedDenominator = guaranteed ? 1n : denominator / reducedGcd;
-            const chance = guaranteed ? 1 : Number(numerator) / Number(denominator);
-            const rate = guaranteed ? 'Always' : `${reducedNumerator}/${reducedDenominator}`;
+            const combatLevel = computeCombatLevel(debugnames, npcConfigs);
 
-            for (const [area, locations] of byArea) {
-                const source: NpcDropSource = {
-                    item: prettify(item),
-                    quantity,
-                    chance,
-                    rate,
-                    source: resolved.label,
-                    triggerKey,
-                    npcDebugnames: resolved.debugnames,
-                    combatLevel,
-                    area,
-                    locations
-                };
+            const emit = (item: string, quantity: number, numerator: bigint, denominator: bigint, guaranteed: boolean) => {
+                const reducedGcd = guaranteed ? 1n : gcdBig(numerator, denominator);
+                const reducedNumerator = guaranteed ? 1n : numerator / reducedGcd;
+                const reducedDenominator = guaranteed ? 1n : denominator / reducedGcd;
+                const chance = guaranteed ? 1 : Number(numerator) / Number(denominator);
+                const rate = guaranteed ? 'Always' : `${reducedNumerator}/${reducedDenominator}`;
 
-                const byItemList = dropsByItem.get(item) ?? [];
-                byItemList.push(source);
-                dropsByItem.set(item, byItemList);
+                for (const [area, locations] of byArea) {
+                    const source: NpcDropSource = {
+                        item: prettify(item),
+                        quantity,
+                        chance,
+                        rate,
+                        source: displayName,
+                        triggerKey,
+                        npcDebugnames: debugnames,
+                        combatLevel,
+                        area,
+                        locations
+                    };
 
-                for (const debugname of resolved.debugnames) {
-                    const byNpcList = dropsByNpc.get(debugname) ?? [];
+                    const byItemList = dropsByItem.get(item) ?? [];
+                    byItemList.push(source);
+                    dropsByItem.set(item, byItemList);
+
+                    const byNpcList = dropsByNpc.get(displayName) ?? [];
                     byNpcList.push(source);
-                    dropsByNpc.set(debugname, byNpcList);
+                    dropsByNpc.set(displayName, byNpcList);
+                }
+            };
+
+            for (const row of table.rows) {
+                if (row.kind === 'guaranteed') {
+                    emit(row.item, row.quantity, 1n, 1n, true);
                 }
             }
-        };
 
-        for (const row of table.rows) {
-            if (row.kind === 'guaranteed') {
-                emit(row.item, row.quantity, 1n, 1n, true);
+            for (const drop of flattenTable(tables, tableName, flattenMemo)) {
+                emit(drop.item, drop.quantity, drop.numerator, drop.denominator, false);
             }
-        }
-
-        for (const drop of flattenTable(tables, tableName, flattenMemo)) {
-            emit(drop.item, drop.quantity, drop.numerator, drop.denominator, false);
         }
     }
 
