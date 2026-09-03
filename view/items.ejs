@@ -131,7 +131,7 @@
                 <% results.drops.forEach(function(row) { %>
                     <tr>
                         <td><%= row.item %></td>
-                        <td><%= row.source %></td>
+                        <td><a class="c" href="/npc?q=<%= encodeURIComponent(row.source) %>"><%= row.source %></a></td>
                         <td class="numeric"><%= row.combatLevel ?? '-' %></td>
                         <td><%= row.rate %></td>
                         <td class="numeric"><%= row.quantity %></td>

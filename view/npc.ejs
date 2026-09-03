@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NPC Database</title>
+<link rel="stylesheet" href="/website/theme.css">
+<link rel="stylesheet" href="/website/tables.css">
+<style>
+.sectiontitle { text-align: left; margin: 16px 0 2px; font-size: 16px; }
+.npctitle { text-align: left; margin: 24px 0 4px; font-size: 18px; }
+.grouptitle { text-align: left; margin: 12px 0 2px; font-size: 14px; color: #a3aa9e; }
+.searchform { text-align: center; }
+.searchform input[type="text"] { margin-top: 4px; }
+.searchform input[type="submit"] { margin-top: 4px; }
+.emptynote { color: #a3aa9e; padding: 8px 0; margin: 0; }
+.map-link-disabled { color: #a3aa9e; }
+.canvas-frame { padding: 8px; display: inline-block; }
+#canvas { display: block; background: #000; }
+</style>
+</head>
+<body bgcolor="black" text="white" link="#90c040" alink="#90c040" vlink="#90c040" style="margin:0px">
+
+<%- include('partials/frame-header') %>
+
+<table width="300" bgcolor="black" cellpadding="4"><tbody><tr><td class="e"><center>
+<b>NPC Database</b><br><a href="/" class="c">Main menu</a>
+</center></td></tr></tbody></table>
+
+<br>
+<table width="280" bgcolor="black" cellpadding="4"><tbody><tr><td class="b" bgcolor="#474747" background="/website/stoneback.gif"><center>
+<form class="searchform" method="get" action="/npc">
+<b>Search for an NPC</b><br>
+<input type="text" name="q" maxlength="40" size="22" placeholder="e.g. dark wizard" value="<%= query %>" autofocus><br>
+<input type="submit" value="Search">
+</form>
+</center></td></tr></tbody></table>
+
+<br>
+<table width="560" bgcolor="black" cellpadding="10"><tbody><tr><td class="e" style="text-align:left;">
+
+<% if (!results) { %>
+    <p class="emptynote">Enter an NPC name above to search.</p>
+<% } else if (results.length === 0) { %>
+    <p class="emptynote">No NPC found matching "<%= query %>".</p>
+<% } else { %>
+    <% results.forEach(function(npc) { %>
+        <div class="npctitle"><b><%= npc.name %></b></div>
+
+        <div class="sectiontitle"><b>Drops</b></div>
+        <% if (npc.dropGroups.length === 0) { %>
+            <p class="emptynote">No known drops for this NPC.</p>
+        <% } else { %>
+            <% npc.dropGroups.forEach(function(group, groupIndex) { %>
+                <% if (npc.dropGroups.length > 1) { %>
+                    <div class="grouptitle">Variant <%= groupIndex + 1 %><% if (group.combatLevel !== null) { %> (level <%= group.combatLevel %>)<% } %></div>
+                <% } %>
+                <table class="rs-table">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th class="numeric">Combat Level</th>
+                            <th>Rate</th>
+                            <th class="numeric">Qty</th>
+                            <th class="numeric">Spawns</th>
+                            <th>Area</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% group.drops.forEach(function(row) { %>
+                            <tr>
+                                <td><a class="c" href="/items?q=<%= encodeURIComponent(row.item) %>"><%= row.item %></a></td>
+                                <td class="numeric"><%= row.combatLevel ?? '-' %></td>
+                                <td><%= row.rate %></td>
+                                <td class="numeric"><%= row.quantity %></td>
+                                <td class="numeric"><%= row.locations.length %></td>
+                                <td><%= row.area ?? 'Unknown area' %></td>
+                                <td>
+                                    <% if (row.locations.length > 0) { %>
+                                        <a class="c" href="#map" onclick="focusMap(<%= row.locations[0].x %>, <%= row.locations[0].z %>); return false;">Show on Map</a>
+                                    <% } else { %>
+                                        <span class="map-link-disabled">No known location</span>
+                                    <% } %>
+                                </td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            <% }); %>
+        <% } %>
+
+        <div class="sectiontitle"><b>Spawns</b></div>
+        <% if (npc.spawnAreas.length === 0) { %>
+            <p class="emptynote">No known spawn locations.</p>
+        <% } else { %>
+            <table class="rs-table">
+                <thead>
+                    <tr>
+                        <th>Area</th>
+                        <th class="numeric">Spawns</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% npc.spawnAreas.forEach(function(row) { %>
+                        <tr>
+                            <td><%= row.area ?? 'Unknown area' %></td>
+                            <td class="numeric"><%= row.locations.length %></td>
+                            <td>
+                                <% if (row.locations.length > 0) { %>
+                                    <a class="c" href="#map" onclick="focusMap(<%= row.locations[0].x %>, <%= row.locations[0].z %>); return false;">Show on Map</a>
+                                <% } else { %>
+                                    <span class="map-link-disabled">No known location</span>
+                                <% } %>
+                            </td>
+                        </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+        <% } %>
+    <% }); %>
+
+    <%
+        const npcMarkers = [];
+        results.forEach(npc => {
+            npc.dropGroups.forEach(group => group.drops.forEach(d => d.locations.forEach(l => npcMarkers.push({ x: l.x, z: l.z }))));
+            npc.spawnAreas.forEach(a => a.locations.forEach(l => npcMarkers.push({ x: l.x, z: l.z })));
+        });
+        const initialCenter = npcMarkers[0] || null;
+    %>
+
+    <div class="sectiontitle" id="map"><b>Map</b></div>
+    <p class="emptynote" style="margin: 0 0 8px;">Yellow dots are NPCs (drop sources and spawns). Click a "Show on Map" link above to re-center.</p>
+    <center>
+    <div class="canvas-frame">
+        <canvas id="canvas" width="860" height="560"></canvas>
+    </div>
+    </center>
+
+    <script type="module">
+        import { MapView } from '/mapview/mapview.js';
+
+        const npcMarkers = <%- JSON.stringify(npcMarkers) %>;
+        const initialCenter = <%- JSON.stringify(initialCenter) %>;
+
+        const mapView = new MapView();
+        window.__mapView = mapView;
+
+        window.focusMap = function (x, z) {
+            window.__mapView.centerOn(x, z);
+            document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+
+        const applyMarkers = () => {
+            mapView.setMarkers([], npcMarkers);
+            if (initialCenter) {
+                mapView.centerOn(initialCenter.x, initialCenter.z);
+            }
+        };
+
+        // markers/centering only take effect once maininit() has finished
+        // loading worldmap.jag
+        const waitForLoad = setInterval(() => {
+            if (mapView.loaded) {
+                clearInterval(waitForLoad);
+                applyMarkers();
+            }
+        }, 100);
+    </script>
+<% } %>
+
+</td></tr></tbody></table>
+<br>
+
+<%- include('partials/frame-footer') %>
+
+</body>
+</html>

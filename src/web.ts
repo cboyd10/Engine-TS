@@ -25,7 +25,7 @@ import { LoggerEventType } from '#/server/logger/LoggerEventType.js';
 import WSClientSocket from '#/server/ws/WSClientSocket.js';
 
 import Environment from '#/util/Environment.js';
-import { searchItemSources } from '#/util/ItemSourceIndex.js';
+import { searchItemSources, searchNpcSources } from '#/util/ItemSourceIndex.js';
 import { tryParseInt, tryParseString } from '#/util/TryParse.js';
 import { createDefaultWorldConfig, loadWorldConfig, normalizeWorldConfig, saveWorldConfig } from '#/util/WorldConfig.js';
 
@@ -532,6 +532,15 @@ fastify.get<{ Querystring: { q?: string } }>('/items', async (req, reply) => {
     const results = query.trim() ? searchItemSources(query) : null;
 
     return reply.viewAsync('items.ejs', { query, results });
+});
+
+// NPC lookup route
+
+fastify.get<{ Querystring: { q?: string } }>('/npc', async (req, reply) => {
+    const query = req.query.q ?? '';
+    const results = query.trim() ? searchNpcSources(query) : null;
+
+    return reply.viewAsync('npc.ejs', { query, results });
 });
 
 // commands docs route
