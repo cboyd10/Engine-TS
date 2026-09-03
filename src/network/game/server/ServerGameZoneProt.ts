@@ -11,5 +11,5 @@ export default class ServerGameZoneProt extends ServerGameProt {
     static readonly LOC_DEL = new ServerGameZoneProt(194, 2);
     static readonly OBJ_COUNT = new ServerGameZoneProt(117, 7);
     static readonly MAP_ANIM = new ServerGameZoneProt(233, 6);
-    static readonly OBJ_ADD = new ServerGameZoneProt(60, 5);
+    static readonly OBJ_ADD = new ServerGameZoneProt(60, 7);
 }

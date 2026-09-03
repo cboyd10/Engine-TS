@@ -18,6 +18,12 @@ export default class Obj extends NonPathingEntity {
     reveal: number = -1;
     lastChange: number = -1;
 
+    /**
+     * The npc type that dropped this obj, or -1 if it wasn't dropped by an npc
+     * (player-dropped, static/quest spawn, etc).
+     */
+    sourceNpc: number = -1;
+
     constructor(level: number, x: number, z: number, lifecycle: EntityLifeCycle, type: number, count: number) {
         super(level, x, z, 1, 1, lifecycle);
         this.type = type;

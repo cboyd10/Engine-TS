@@ -37,9 +37,12 @@ const ObjOps: CommandHandlers = {
             return;
         }
 
+        const sourceNpc: number = state._activeNpc?.type ?? -1;
+
         if (!objType.stackable || count === 1) {
             for (let i = 0; i < count; i++) {
                 const obj: Obj = new Obj(position.level, position.x, position.z, EntityLifeCycle.DESPAWN, objId, 1);
+                obj.sourceNpc = sourceNpc;
                 World.addObj(obj, state.activePlayer.hash64, duration);
 
                 state.activeObj = obj;
@@ -47,6 +50,7 @@ const ObjOps: CommandHandlers = {
             }
         } else {
             const obj: Obj = new Obj(position.level, position.x, position.z, EntityLifeCycle.DESPAWN, objId, count);
+            obj.sourceNpc = sourceNpc;
             World.addObj(obj, state.activePlayer.hash64, duration);
 
             state.activeObj = obj;
@@ -75,9 +79,12 @@ const ObjOps: CommandHandlers = {
             return;
         }
 
+        const sourceNpc: number = state._activeNpc?.type ?? -1;
+
         if (!objType.stackable || count === 1) {
             for (let i = 0; i < count; i++) {
                 const obj: Obj = new Obj(position.level, position.x, position.z, EntityLifeCycle.DESPAWN, objId, 1);
+                obj.sourceNpc = sourceNpc;
                 World.addObj(obj, Obj.NO_RECEIVER, duration);
 
                 state.activeObj = obj;
@@ -85,6 +92,7 @@ const ObjOps: CommandHandlers = {
             }
         } else {
             const obj: Obj = new Obj(position.level, position.x, position.z, EntityLifeCycle.DESPAWN, objId, count);
+            obj.sourceNpc = sourceNpc;
             World.addObj(obj, Obj.NO_RECEIVER, duration);
 
             state.activeObj = obj;
