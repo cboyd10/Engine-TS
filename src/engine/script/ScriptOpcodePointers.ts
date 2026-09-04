@@ -661,6 +661,9 @@ const ScriptOpcodePointers: {
     [ScriptOpcode.NPC_HEROPOINTS]: {
         require: ['active_npc', 'active_player']
     },
+    [ScriptOpcode.NPC_KILLCREDIT]: {
+        require: ['active_npc', 'active_player']
+    },
     [ScriptOpcode.NPC_NAME]: {
         require: ['active_npc'],
         require2: ['active_npc2']

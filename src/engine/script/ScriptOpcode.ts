@@ -232,6 +232,7 @@ export const enum ScriptOpcode {
     NPC_GETMODE,
     NPC_HASOP, // official
     NPC_HEROPOINTS, // official
+    NPC_KILLCREDIT,
     NPC_HUNT,
     NPC_HUNTALL, // official
     NPC_INRANGE,
@@ -690,6 +691,7 @@ export const ScriptOpcodeMap: Map<string, number> = new Map([
     ['NPC_GETMODE', ScriptOpcode.NPC_GETMODE],
     ['NPC_HASOP', ScriptOpcode.NPC_HASOP],
     ['NPC_HEROPOINTS', ScriptOpcode.NPC_HEROPOINTS],
+    ['NPC_KILLCREDIT', ScriptOpcode.NPC_KILLCREDIT],
     ['NPC_HUNT', ScriptOpcode.NPC_HUNT],
     ['NPC_HUNTALL', ScriptOpcode.NPC_HUNTALL],
     ['NPC_INRANGE', ScriptOpcode.NPC_INRANGE],

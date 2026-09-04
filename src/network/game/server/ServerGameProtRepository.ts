@@ -26,6 +26,7 @@ import IfSetPositionEncoder from '#/network/game/server/codec/IfSetPositionEncod
 import IfSetTabActiveEncoder from '#/network/game/server/codec/IfSetTabActiveEncoder.js';
 import IfSetTabEncoder from '#/network/game/server/codec/IfSetTabEncoder.js';
 import IfSetTextEncoder from '#/network/game/server/codec/IfSetTextEncoder.js';
+import KillCreditEncoder from '#/network/game/server/codec/KillCreditEncoder.js';
 import LastLoginInfoEncoder from '#/network/game/server/codec/LastLoginInfoEncoder.js';
 import LocAddChangeEncoder from '#/network/game/server/codec/LocAddChangeEncoder.js';
 import LocAnimEncoder from '#/network/game/server/codec/LocAnimEncoder.js';
@@ -91,6 +92,7 @@ import IfSetPosition from '#/network/game/server/model/IfSetPosition.js';
 import IfSetTab from '#/network/game/server/model/IfSetTab.js';
 import IfSetTabActive from '#/network/game/server/model/IfSetTabActive.js';
 import IfSetText from '#/network/game/server/model/IfSetText.js';
+import KillCredit from '#/network/game/server/model/KillCredit.js';
 import LastLoginInfo from '#/network/game/server/model/LastLoginInfo.js';
 import LocAddChange from '#/network/game/server/model/LocAddChange.js';
 import LocAnim from '#/network/game/server/model/LocAnim.js';
@@ -188,6 +190,7 @@ class ServerGameProtRepository {
         this.bind(IfSetScrollPos, new IfSetScrollPosEncoder());
         this.bind(IfSetText, new IfSetTextEncoder());
         this.bind(IfSetTabActive, new IfSetTabActiveEncoder());
+        this.bind(KillCredit, new KillCreditEncoder());
         this.bind(LastLoginInfo, new LastLoginInfoEncoder());
         this.bind(LocAddChange, new LocAddChangeEncoder());
         this.bind(LocAnim, new LocAnimEncoder());
