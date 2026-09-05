@@ -293,6 +293,9 @@ export default class Player extends PathingEntity {
     tempRun: number = 0;
     runenergy: number = 10000;
     lastRunEnergy: number = -1;
+    // issue #151: last {fish,percent} signature sent via FISHING_CATCH_CHANCE,
+    // so NetworkPlayer.updateFishingSpot() only writes on an actual change
+    lastFishingSpotKey: string = '';
     runweight: number = 0;
     playtime: number = 0;
     stats: Int32Array = new Int32Array(21);

@@ -55,6 +55,7 @@ export default class ServerGameProt {
     static readonly UPDATE_REBOOT_TIMER = new ServerGameProt(204, 2);
     static readonly UPDATE_STAT = new ServerGameProt(154, 6);
     static readonly KILL_CREDIT = new ServerGameProt(250, 2);
+    static readonly FISHING_CATCH_CHANCE = new ServerGameProt(254, -1);
     static readonly UPDATE_RUNENERGY = new ServerGameProt(195, 1);
     static readonly RESET_ANIMS = new ServerGameProt(201, 0);
     static readonly UPDATE_PID = new ServerGameProt(120, 3);

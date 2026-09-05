@@ -28,7 +28,7 @@
     "sqlite:reset": "prisma migrate reset --force --schema prisma/singleworld/schema.prisma",
     "sqlite:schema": "prisma migrate dev --schema prisma/singleworld/schema.prisma",
     "start": "npm install && tsx src/app.ts",
-    "test": "node --import tsx --test src/**/*.test.ts"
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "lint-staged": {
     "*.{js,ts}": [
