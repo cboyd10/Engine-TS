@@ -6,6 +6,7 @@ import {
     NpcInfoFaceEntity,
     NpcInfoSay,
     NpcInfoSpotanim,
+    NpcInfoTimer,
     type InfoMessage,
     PlayerInfoAnim,
     PlayerInfoAppearance,
@@ -148,7 +149,7 @@ export class PlayerRenderer {
 }
 
 export class NpcRenderer {
-    private readonly caches: Array<Array<Uint8Array | null>> = Array.from({ length: 8 }, () => Array<Uint8Array | null>(16384).fill(null));
+    private readonly caches: Array<Array<Uint8Array | null>> = Array.from({ length: 9 }, () => Array<Uint8Array | null>(16384).fill(null));
     private readonly highs = new Uint16Array(16384);
     private readonly lows = new Uint16Array(16384);
 
@@ -191,6 +192,9 @@ export class NpcRenderer {
             highs += length;
             lows += length;
         }
+        if ((masks & NpcInfoProt.TIMER) !== 0) {
+            highs += this.cache(nid, new NpcInfoTimer(npc.timerMaskTicks), NpcInfoProt.TIMER);
+        }
 
         if (highs > 0) {
             this.highs[nid] = highs + NpcRenderer.header(masks);
@@ -232,7 +236,7 @@ export class NpcRenderer {
 
     removeTemporary(): void {
         this.highs.fill(0);
-        for (const prot of [NpcInfoProt.ANIM, NpcInfoProt.FACE_ENTITY, NpcInfoProt.SAY, NpcInfoProt.DAMAGE, NpcInfoProt.DAMAGE2, NpcInfoProt.CHANGE_TYPE, NpcInfoProt.SPOT_ANIM, NpcInfoProt.FACE_COORD]) {
+        for (const prot of [NpcInfoProt.ANIM, NpcInfoProt.FACE_ENTITY, NpcInfoProt.SAY, NpcInfoProt.DAMAGE, NpcInfoProt.DAMAGE2, NpcInfoProt.CHANGE_TYPE, NpcInfoProt.SPOT_ANIM, NpcInfoProt.FACE_COORD, NpcInfoProt.TIMER]) {
             this.caches[npcInfoProtIndex(prot)].fill(null);
         }
     }
@@ -242,11 +246,21 @@ export class NpcRenderer {
         this.lows[id] = 0;
     }
 
-    private static header(masks: number): number {
-        let length = 1;
-        if (masks > 0xff) {
-            length++;
-        }
-        return length;
+    // custom (issue #150): NpcInfoProt's original 8-bit mask space (0x1-0x80)
+    // was already fully occupied by real masks with no spare "BIG"-style
+    // continuation flag reserved (unlike PlayerInfoProt, which reserved 0x80
+    // for exactly this future-extension purpose -- see writeBlocks() in
+    // info.ts, which conditionally emits 1 or 2 bytes keyed off that flag).
+    // Adding NpcInfoProt.TIMER (0x100) as a 9th bit therefore can't reuse
+    // that conditional-length trick without reclaiming one of the 8
+    // existing bits (a much larger, riskier change touching every existing
+    // mask). The lower-risk choice made here: the npc info mask header is
+    // now unconditionally 2 bytes any time an npc has any mask update at
+    // all (matching writeBlocks()'s unconditional `ip2()` write) -- a small
+    // global bandwidth cost (+1 byte per npc-tick-with-any-update, not just
+    // TIMER updates) traded for zero renumbering of DAMAGE2/ANIM/FACE_ENTITY/
+    // SAY/DAMAGE/CHANGE_TYPE/SPOT_ANIM/FACE_COORD.
+    private static header(_masks: number): number {
+        return 2;
     }
 }

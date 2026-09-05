@@ -327,3 +327,25 @@ export class NpcInfoSpotanim implements InfoMessage {
         return false;
     }
 }
+
+// custom (issue #150): generic "ticks remaining" payload for NpcInfoProt.TIMER
+// -- a one-shot update (persists() === false, matching ANIM/SAY/SPOT_ANIM),
+// sent once when the timer is armed. The client owns decrementing it locally
+// between updates (see CONTEXT.md/PR notes on the client-vs-server
+// tick-decrement ownership choice); the server never re-sends the same
+// countdown mid-flight.
+export class NpcInfoTimer implements InfoMessage {
+    constructor(private readonly ticksRemaining: number) {}
+
+    encode(buf: Packet): void {
+        buf.p2(this.ticksRemaining);
+    }
+
+    test(): number {
+        return 2;
+    }
+
+    persists(): boolean {
+        return false;
+    }
+}
