@@ -1098,6 +1098,33 @@ export function searchItemSources(query: string): { shops: ShopSource[]; groundS
     return { shops, groundSpawns, drops };
 }
 
+// Collapses buildNpcDropSources()'s one-row-per-(item, quantity/weight-row,
+// area) rows (the /items-facing convention, left untouched) back into one
+// row per (item, quantity, chance) for the /npc page's Drops list (issue
+// #154) - a drop occurring in several areas is one NPC-facing fact, not
+// several. Locations are pooled across every merged row so "Show on Map"
+// still has something to center on; area is no longer meaningful per-row
+// so it's cleared rather than kept accurate for only one of several areas.
+// Order (chance descending, from buildNpcDropSources()) is preserved by
+// keying each row on first sight.
+function mergeDropsAcrossAreas(rows: NpcDropSource[]): NpcDropSource[] {
+    const merged = new Map<string, NpcDropSource>();
+    const order: string[] = [];
+
+    for (const row of rows) {
+        const key = `${row.item} ${row.quantity} ${row.chance}`;
+        const existing = merged.get(key);
+        if (existing) {
+            existing.locations.push(...row.locations);
+        } else {
+            merged.set(key, { ...row, area: null, locations: [...row.locations] });
+            order.push(key);
+        }
+    }
+
+    return order.map(key => merged.get(key)!);
+}
+
 // Parallel to searchItemSources() (issue #102), but matched against the
 // full NPC display-name universe (every real .npc name=, from
 // npcDisplayNames) rather than just drop-/spawn-covered names - so a
@@ -1136,7 +1163,7 @@ export function searchNpcSources(query: string): NpcSearchResult[] {
             .map(([triggerKey, rows]) => ({
                 triggerKey,
                 combatLevel: rows[0].combatLevel,
-                drops: rows
+                drops: mergeDropsAcrossAreas(rows)
             }))
             .sort((a, b) => b.drops.length - a.drops.length || a.triggerKey.localeCompare(b.triggerKey));
 

@@ -62,8 +62,6 @@
                             <th class="numeric">Combat Level</th>
                             <th>Rate</th>
                             <th class="numeric">Qty</th>
-                            <th class="numeric">Spawns</th>
-                            <th>Area</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -74,8 +72,6 @@
                                 <td class="numeric"><%= row.combatLevel ?? '-' %></td>
                                 <td><%= row.rate %></td>
                                 <td class="numeric"><%= row.quantity %></td>
-                                <td class="numeric"><%= row.locations.length %></td>
-                                <td><%= row.area ?? 'Unknown area' %></td>
                                 <td>
                                     <% if (row.locations.length > 0) { %>
                                         <a class="c" href="#map" onclick="focusMap(<%= row.locations[0].x %>, <%= row.locations[0].z %>); return false;">Show on Map</a>
