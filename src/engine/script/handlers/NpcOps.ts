@@ -36,6 +36,7 @@ import {
 } from '#/engine/script/ScriptValidators.js';
 import ServerTriggerType from '#/engine/script/ServerTriggerType.js';
 import World from '#/engine/World.js';
+import KillCredit from '#/network/game/server/model/KillCredit.js';
 
 const NpcOps: CommandHandlers = {
     [ScriptOpcode.NPC_FINDUID]: state => {
@@ -142,6 +143,12 @@ const NpcOps: CommandHandlers = {
         state.activePlayer = player;
         state.pointerAdd(ActivePlayer[state.intOperand]);
         state.pushInt(1);
+    },
+
+    // Credits this NPC's death to state.activePlayer (the hero resolved by npc_findhero) with
+    // a client-facing kill-credit signal, independent of whether anything drops.
+    [ScriptOpcode.NPC_KILLCREDIT]: state => {
+        state.activePlayer.write(new KillCredit(state.activeNpc.type));
     },
 
     [ScriptOpcode.NPC_PARAM]: state => {
