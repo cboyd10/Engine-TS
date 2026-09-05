@@ -58,19 +58,9 @@ export type NpcSpawnArea = {
     locations: NpcLocation[];
 };
 
-// One structurally distinct drop-table grouping for a display name (issue
-// #102's same-name/different-table edge case - e.g. "Dark wizard" covering
-// both bearded_dark_wizard's and young_dark_wizard's separate tables).
-// triggerKey identifies which grouping; length 1 is the common case.
-export type NpcDropGroup = {
-    triggerKey: string;
-    combatLevel: number | string | null;
-    drops: NpcDropSource[];
-};
-
 export type NpcSearchResult = {
     name: string;
-    dropGroups: NpcDropGroup[];
+    drops: NpcDropSource[];
     spawnAreas: NpcSpawnArea[];
 };
 
@@ -1098,31 +1088,73 @@ export function searchItemSources(query: string): { shops: ShopSource[]; groundS
     return { shops, groundSpawns, drops };
 }
 
+// Collapses multiple same-value combatLevels down to one (e.g. three of
+// "Goblin"'s five variants all report vislevel 5 - that should read as one
+// "5", not "5, 5, 5"), then formats the result: a single surviving value
+// keeps its original type/shape (a plain number, or an existing "min-max"
+// range string from computeCombatLevel()), while more than one distinct
+// value becomes a numerically-sorted, comma-joined string (e.g. "2, 5, 13")
+// so a Drops row shared across combat-level variants shows all of them.
+function combineCombatLevels(levels: (number | string | null)[]): number | string | null {
+    const distinct = new Map<string, number | string | null>();
+    for (const level of levels) {
+        distinct.set(level === null ? '' : String(level), level);
+    }
+
+    const values = [...distinct.values()];
+    if (values.length <= 1) {
+        return values[0] ?? null;
+    }
+
+    return values
+        .slice()
+        .sort((a, b) => {
+            const na = parseInt(String(a), 10);
+            const nb = parseInt(String(b), 10);
+            return Number.isNaN(na) || Number.isNaN(nb) ? String(a).localeCompare(String(b)) : na - nb;
+        })
+        .map(v => v ?? '?')
+        .join(', ');
+}
+
 // Collapses buildNpcDropSources()'s one-row-per-(item, quantity/weight-row,
-// area) rows (the /items-facing convention, left untouched) back into one
-// row per (item, quantity, chance) for the /npc page's Drops list (issue
-// #154) - a drop occurring in several areas is one NPC-facing fact, not
-// several. Locations are pooled across every merged row so "Show on Map"
+// area) rows (the /items-facing convention, left untouched) - and, for a
+// display name resolving to more than one structurally distinct drop table
+// (e.g. "Goblin" covering five separate combat-level variants: goblin/
+// goblin_armed/goblin_helmet/goblin_greenarmour/goblin_redarmour), one row
+// per variant too - into a single /npc-facing Drops row per (item, rate)
+// (issue #154, second grilling round). A drop shared across several areas
+// and/or combat-level variants is one NPC-facing fact, not several
+// duplicate or "Variant N" rows; its Combat Level column instead lists
+// every distinct level that has it (see combineCombatLevels() above).
+// Quantity is taken from the first row seen for a given (item, rate) pair -
+// stable in practice, since a shared rate implies a shared weight/table
+// shape. Locations are pooled across every merged row so "Show on Map"
 // still has something to center on; area is no longer meaningful per-row
-// so it's cleared rather than kept accurate for only one of several areas.
-// Order (chance descending, from buildNpcDropSources()) is preserved by
-// keying each row on first sight.
-function mergeDropsAcrossAreas(rows: NpcDropSource[]): NpcDropSource[] {
+// so it's cleared. Sorted by item name, per issue #154.
+function mergeNpcDrops(rows: NpcDropSource[]): NpcDropSource[] {
     const merged = new Map<string, NpcDropSource>();
-    const order: string[] = [];
+    const combatLevelsByKey = new Map<string, (number | string | null)[]>();
 
     for (const row of rows) {
-        const key = `${row.item} ${row.quantity} ${row.chance}`;
+        const key = `${row.item} ${row.rate}`;
         const existing = merged.get(key);
         if (existing) {
             existing.locations.push(...row.locations);
+            combatLevelsByKey.get(key)!.push(row.combatLevel);
         } else {
             merged.set(key, { ...row, area: null, locations: [...row.locations] });
-            order.push(key);
+            combatLevelsByKey.set(key, [row.combatLevel]);
         }
     }
 
-    return order.map(key => merged.get(key)!);
+    const result = [...merged.entries()].map(([key, row]) => {
+        row.combatLevel = combineCombatLevels(combatLevelsByKey.get(key)!);
+        return row;
+    });
+
+    result.sort((a, b) => a.item.localeCompare(b.item));
+    return result;
 }
 
 // Parallel to searchItemSources() (issue #102), but matched against the
@@ -1148,28 +1180,9 @@ export function searchNpcSources(query: string): NpcSearchResult[] {
     for (const name of matchedNames) {
         const drops = index.dropsByNpc.get(name) ?? [];
 
-        // group by triggerKey - the same display name can cover more than
-        // one structurally distinct drop table (e.g. "Dark wizard" ->
-        // bearded_dark_wizard and young_dark_wizard, two separate
-        // [ai_queue3,...] triggers); each becomes its own subsection
-        const dropsByTrigger = new Map<string, NpcDropSource[]>();
-        for (const drop of drops) {
-            const list = dropsByTrigger.get(drop.triggerKey) ?? [];
-            list.push(drop);
-            dropsByTrigger.set(drop.triggerKey, list);
-        }
-
-        const dropGroups: NpcDropGroup[] = [...dropsByTrigger.entries()]
-            .map(([triggerKey, rows]) => ({
-                triggerKey,
-                combatLevel: rows[0].combatLevel,
-                drops: mergeDropsAcrossAreas(rows)
-            }))
-            .sort((a, b) => b.drops.length - a.drops.length || a.triggerKey.localeCompare(b.triggerKey));
-
         results.push({
             name,
-            dropGroups,
+            drops: mergeNpcDrops(drops),
             spawnAreas: index.npcSpawnAreasByName.get(name) ?? []
         });
     }

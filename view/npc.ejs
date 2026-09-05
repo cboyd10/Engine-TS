@@ -9,7 +9,6 @@
 <style>
 .sectiontitle { text-align: left; margin: 16px 0 2px; font-size: 16px; }
 .npctitle { text-align: left; margin: 24px 0 4px; font-size: 18px; }
-.grouptitle { text-align: left; margin: 12px 0 2px; font-size: 14px; color: #a3aa9e; }
 .searchform { text-align: center; }
 .searchform input[type="text"] { margin-top: 4px; }
 .searchform input[type="submit"] { margin-top: 4px; }
@@ -48,42 +47,37 @@
         <div class="npctitle"><b><%= npc.name %></b></div>
 
         <div class="sectiontitle"><b>Drops</b></div>
-        <% if (npc.dropGroups.length === 0) { %>
+        <% if (npc.drops.length === 0) { %>
             <p class="emptynote">No known drops for this NPC.</p>
         <% } else { %>
-            <% npc.dropGroups.forEach(function(group, groupIndex) { %>
-                <% if (npc.dropGroups.length > 1) { %>
-                    <div class="grouptitle">Variant <%= groupIndex + 1 %><% if (group.combatLevel !== null) { %> (level <%= group.combatLevel %>)<% } %></div>
-                <% } %>
-                <table class="rs-table">
-                    <thead>
+            <table class="rs-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th class="numeric">Combat Level</th>
+                        <th>Rate</th>
+                        <th class="numeric">Qty</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% npc.drops.forEach(function(row) { %>
                         <tr>
-                            <th>Item</th>
-                            <th class="numeric">Combat Level</th>
-                            <th>Rate</th>
-                            <th class="numeric">Qty</th>
-                            <th></th>
+                            <td><a class="c" href="/items?q=<%= encodeURIComponent(row.item) %>"><%= row.item %></a></td>
+                            <td class="numeric"><%= row.combatLevel ?? '-' %></td>
+                            <td><%= row.rate %></td>
+                            <td class="numeric"><%= row.quantity %></td>
+                            <td>
+                                <% if (row.locations.length > 0) { %>
+                                    <a class="c" href="#map" onclick="focusMap(<%= row.locations[0].x %>, <%= row.locations[0].z %>); return false;">Show on Map</a>
+                                <% } else { %>
+                                    <span class="map-link-disabled">No known location</span>
+                                <% } %>
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        <% group.drops.forEach(function(row) { %>
-                            <tr>
-                                <td><a class="c" href="/items?q=<%= encodeURIComponent(row.item) %>"><%= row.item %></a></td>
-                                <td class="numeric"><%= row.combatLevel ?? '-' %></td>
-                                <td><%= row.rate %></td>
-                                <td class="numeric"><%= row.quantity %></td>
-                                <td>
-                                    <% if (row.locations.length > 0) { %>
-                                        <a class="c" href="#map" onclick="focusMap(<%= row.locations[0].x %>, <%= row.locations[0].z %>); return false;">Show on Map</a>
-                                    <% } else { %>
-                                        <span class="map-link-disabled">No known location</span>
-                                    <% } %>
-                                </td>
-                            </tr>
-                        <% }); %>
-                    </tbody>
-                </table>
-            <% }); %>
+                    <% }); %>
+                </tbody>
+            </table>
         <% } %>
 
         <div class="sectiontitle"><b>Spawns</b></div>
@@ -120,7 +114,7 @@
     <%
         const npcMarkers = [];
         results.forEach(npc => {
-            npc.dropGroups.forEach(group => group.drops.forEach(d => d.locations.forEach(l => npcMarkers.push({ x: l.x, z: l.z }))));
+            npc.drops.forEach(d => d.locations.forEach(l => npcMarkers.push({ x: l.x, z: l.z })));
             npc.spawnAreas.forEach(a => a.locations.forEach(l => npcMarkers.push({ x: l.x, z: l.z })));
         });
         const initialCenter = npcMarkers[0] || null;
