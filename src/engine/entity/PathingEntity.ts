@@ -99,6 +99,10 @@ export default abstract class PathingEntity extends Entity {
     spotanimId: number = -1;
     spotanimHeight: number = -1;
     spotanimTime: number = -1;
+    // custom (issue #150): generic "ticks remaining" payload for
+    // NpcInfoProt.TIMER (one-shot, mirrors animId/spotanimId's lifecycle
+    // below) -- see Npc.setTimerMask().
+    timerMaskTicks: number = -1;
 
     protected constructor(level: number, x: number, z: number, width: number, length: number, lifecycle: EntityLifeCycle, blockWalk: BlockWalk, moveStrategy: MoveStrategy, coordmask: number, entitymask: number) {
         super(level, x, z, width, length, lifecycle);
@@ -624,6 +628,7 @@ export default abstract class PathingEntity extends Entity {
         this.spotanimId = -1;
         this.spotanimHeight = -1;
         this.spotanimTime = -1;
+        this.timerMaskTicks = -1;
         this.faceSquareX = -1;
         this.faceSquareZ = -1;
 

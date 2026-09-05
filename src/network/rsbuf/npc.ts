@@ -25,6 +25,9 @@ export class Npc {
     graphicId = -1;
     graphicHeight = -1;
     graphicDelay = -1;
+    // custom (issue #150): generic "ticks remaining" payload for the TIMER
+    // mask -- see NpcInfoProt.TIMER in prot.ts.
+    timerMaskTicks = -1;
     observers = 0;
 
     constructor(
@@ -52,5 +55,6 @@ export class Npc {
         this.graphicId = -1;
         this.graphicHeight = -1;
         this.graphicDelay = -1;
+        this.timerMaskTicks = -1;
     }
 }
