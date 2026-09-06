@@ -1116,6 +1116,8 @@ class World {
                 player.updateInvs();
                 // - stat changes
                 player.updateStats();
+                // - fishing spot catch-chance % (issue #151)
+                player.updateFishingSpot();
                 // - afk zones changes
                 player.updateAfkZones();
 

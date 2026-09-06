@@ -2,6 +2,7 @@ import * as rsbuf from '#/network/rsbuf/index.js';
 
 import InvType from '#/cache/config/InvType.js';
 import { CoordGrid } from '#/engine/CoordGrid.js';
+import { computeFishingSpotCatches } from '#/engine/entity/FishingSpotSignal.js';
 import { ModalState } from '#/engine/entity/ModalState.js';
 import Player from '#/engine/entity/Player.js';
 import World from '#/engine/World.js';
@@ -12,6 +13,7 @@ import ClientGameProtCategory from '#/network/game/client/ClientGameProtCategory
 import ServerGameMessageEncoder from '#/network/game/server/ServerGameMessageEncoder.js';
 import CamLookAt from '#/network/game/server/model/CamLookAt.js';
 import CamMoveTo from '#/network/game/server/model/CamMoveTo.js';
+import FishingCatchChance from '#/network/game/server/model/FishingCatchChance.js';
 import IfClose from '#/network/game/server/model/IfClose.js';
 import IfOpenChat from '#/network/game/server/model/IfOpenChat.js';
 import IfOpenMain from '#/network/game/server/model/IfOpenMain.js';
@@ -326,6 +328,24 @@ export class NetworkPlayer extends Player {
         if (Math.floor(this.runenergy) / 100 !== Math.floor(this.lastRunEnergy) / 100) {
             this.write(new UpdateRunEnergy(this.runenergy));
             this.lastRunEnergy = this.runenergy;
+        }
+    }
+
+    // issue #151: catch-chance % per catchable species at the player's
+    // current fishing spot. Recomputed every tick (cheap -- bounded by the
+    // handful of "Fishing spot" NPCs within interaction range) but only
+    // written to the client when the result actually changes, the same
+    // changed-since-last-tick gate updateStats() above uses for UPDATE_STAT.
+    // This one gate naturally covers all three trigger conditions the issue
+    // calls out (Fishing level-up, tool swap, entering/leaving spot range)
+    // without needing a separate hook for each.
+    updateFishingSpot() {
+        const entries = computeFishingSpotCatches(this);
+        const key = entries.length === 0 ? '' : entries.map(entry => `${entry.fish}:${entry.percent}`).join(',');
+
+        if (key !== this.lastFishingSpotKey) {
+            this.write(new FishingCatchChance(entries));
+            this.lastFishingSpotKey = key;
         }
     }
 
