@@ -2,9 +2,17 @@ import * as rsbuf from '#/network/rsbuf/index.js';
 
 import InvType from '#/cache/config/InvType.js';
 import { CoordGrid } from '#/engine/CoordGrid.js';
-import { computeFishingSpotCatches } from '#/engine/entity/FishingSpotSignal.js';
 import { ModalState } from '#/engine/entity/ModalState.js';
 import Player from '#/engine/entity/Player.js';
+// Import order matters here: FishingSpotSignal.js transitively imports Npc.js,
+// which imports PathingEntity.js -- Player.js and PathingEntity.js already
+// have a circular dependency (Player extends PathingEntity; PathingEntity
+// does `instanceof Player` checks), which only resolves safely if something
+// finishes loading Player.js before Npc.js/PathingEntity.js are reached from
+// here. Keep this import after Player, not sorted alphabetically, or the
+// login/engine/logger entrypoints crash with
+// "ReferenceError: Cannot access 'PathingEntity' before initialization".
+import { computeFishingSpotCatches } from '#/engine/entity/FishingSpotSignal.js';
 import World from '#/engine/World.js';
 import { WorldStat } from '#/engine/WorldStat.js';
 import Zone from '#/engine/zone/Zone.js';
