@@ -516,6 +516,23 @@ export default class Npc extends PathingEntity {
         this.masks |= NpcInfoProt.SAY;
     }
 
+    // custom (issue #150): arms the generic NpcInfoProt.TIMER mask with a
+    // plain "ticks remaining" payload -- deliberately generic in signature
+    // (not fishing-specific) so any future script/system (e.g. a monster
+    // respawn timer) can call this directly for the same client-side
+    // countdown display, without new engine work. Distinct from
+    // setTimer()/timerInterval (the AI-wake-timer scheduling mechanism,
+    // engine-internal only, never broadcast) -- this method only concerns
+    // the network-visible countdown. Called explicitly by fishing_movement.
+    // rs2's move_fishing_spot label via the new NPC_SETTIMERMASK opcode,
+    // not automatically coupled into setTimer()/npc_settimer, since most
+    // npc_settimer callers use it for unrelated idle/wander AI scheduling
+    // with no meaningful "ticks remaining" to display.
+    setTimerMask(ticks: number) {
+        this.timerMaskTicks = ticks;
+        this.masks |= NpcInfoProt.TIMER;
+    }
+
     faceSquare(x: number, z: number) {
         this.focus(CoordGrid.fine(x, 1), CoordGrid.fine(z, 1), true);
     }

@@ -437,7 +437,12 @@ export class NpcInfoEncoder {
     }
 
     private writeBlocks(renderer: NpcRenderer, nid: number, masks: number): void {
-        this.updates.p1(masks & 0xff);
+        // custom (issue #150): unconditionally 2 bytes, little-endian (matches
+        // PlayerInfoEncoder.writeBlocks()'s ip2() header byte order) -- see
+        // NpcRenderer.header()'s comment for why this can no longer be a
+        // conditional 1-vs-2-byte header once NpcInfoProt.TIMER (0x100)
+        // exists.
+        this.updates.ip2(masks);
 
         if ((masks & NpcInfoProt.DAMAGE2) !== 0) {
             renderer.write(this.updates, nid, NpcInfoProt.DAMAGE2);
@@ -462,6 +467,9 @@ export class NpcInfoEncoder {
         }
         if ((masks & NpcInfoProt.FACE_COORD) !== 0) {
             renderer.write(this.updates, nid, NpcInfoProt.FACE_COORD);
+        }
+        if ((masks & NpcInfoProt.TIMER) !== 0) {
+            renderer.write(this.updates, nid, NpcInfoProt.TIMER);
         }
     }
 

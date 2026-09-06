@@ -704,6 +704,11 @@ const ScriptOpcodePointers: {
         require: ['active_npc'],
         require2: ['active_npc2']
     },
+    // custom (issue #150): mirrors NPC_SETTIMER's pointer requirement.
+    [ScriptOpcode.NPC_SETTIMERMASK]: {
+        require: ['active_npc'],
+        require2: ['active_npc2']
+    },
     [ScriptOpcode.NPC_STAT]: {
         require: ['active_npc'],
         require2: ['active_npc2']

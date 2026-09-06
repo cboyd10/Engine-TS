@@ -46,7 +46,17 @@ export enum NpcInfoProt {
     DAMAGE = 0x10,
     CHANGE_TYPE = 0x20,
     SPOT_ANIM = 0x40,
-    FACE_COORD = 0x80
+    FACE_COORD = 0x80,
+    // custom (issue #150): generic "ticks remaining" timer mask -- first
+    // consumer is the Fishing plugin's relocation countdown, but the shape
+    // is deliberately generic (plain ticksRemaining payload) so a future
+    // Opponent Information plugin can reuse it for monster-respawn timers.
+    // All 8 low bits (0x1-0x80) were already real, in-use masks with no
+    // spare "BIG"-style continuation flag reserved (unlike PlayerInfoProt,
+    // which reserved 0x80 for exactly this future-extension purpose) -- see
+    // NpcRenderer.header()/writeBlocks() in info.ts for the header-size
+    // consequence of that.
+    TIMER = 0x100
 }
 
 export function npcInfoProtIndex(prot: NpcInfoProt): number {
@@ -67,5 +77,7 @@ export function npcInfoProtIndex(prot: NpcInfoProt): number {
             return 6;
         case NpcInfoProt.FACE_COORD:
             return 7;
+        case NpcInfoProt.TIMER:
+            return 8;
     }
 }

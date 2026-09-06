@@ -452,7 +452,13 @@ export const enum ScriptOpcode {
     CONSOLE = 10000,
     ERROR,
     GETTIMESPENT, // custom: used to profile script execution (current duration)
-    TIMESPENT // custom: used to profile script execution (record start time)
+    TIMESPENT, // custom: used to profile script execution (record start time)
+
+    // custom (issue #150): arms the generic NpcInfoProt.TIMER network mask
+    // with a ticks-remaining payload -- see Npc.setTimerMask(). Appended
+    // here (rather than alphabetically alongside NPC_SETTIMER) to avoid
+    // renumbering every opcode after it.
+    NPC_SETTIMERMASK
 }
 
 export const ScriptOpcodeMap: Map<string, number> = new Map([
@@ -879,7 +885,9 @@ export const ScriptOpcodeMap: Map<string, number> = new Map([
     ['CONSOLE', ScriptOpcode.CONSOLE],
     ['ERROR', ScriptOpcode.ERROR],
     ['GETTIMESPENT', ScriptOpcode.GETTIMESPENT],
-    ['TIMESPENT', ScriptOpcode.TIMESPENT]
+    ['TIMESPENT', ScriptOpcode.TIMESPENT],
+
+    ['NPC_SETTIMERMASK', ScriptOpcode.NPC_SETTIMERMASK]
 ]);
 
 export const ScriptOpcodeNameMap: Map<number, string> = new Map(Array.from(ScriptOpcodeMap.entries()).map(([key, value]) => [value, key]));

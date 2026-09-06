@@ -301,6 +301,15 @@ const NpcOps: CommandHandlers = {
         state.activeNpc.setTimer(check(state.popInt(), NumberNotNull));
     },
 
+    // custom (issue #150): arms the generic NpcInfoProt.TIMER network mask
+    // (ticks-remaining, for client-side countdown display) -- distinct from
+    // NPC_SETTIMER's AI-wake-timer scheduling above. Called explicitly
+    // alongside npc_settimer by scripts that want the countdown broadcast,
+    // rather than automatically for every npc_settimer call.
+    [ScriptOpcode.NPC_SETTIMERMASK]: state => {
+        state.activeNpc.setTimerMask(check(state.popInt(), NumberNotNull));
+    },
+
     [ScriptOpcode.SPOTANIM_NPC]: state => {
         const delay = check(state.popInt(), NumberNotNull);
         const height = check(state.popInt(), NumberNotNull);
