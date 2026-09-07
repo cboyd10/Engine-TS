@@ -1080,7 +1080,8 @@ class World {
                 npc.sayMessage,
                 npc.spotanimId,
                 npc.spotanimHeight,
-                npc.spotanimTime
+                npc.spotanimTime,
+                npc.timerMaskTicks
             );
         }
     }

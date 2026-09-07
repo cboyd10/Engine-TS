@@ -201,7 +201,8 @@ export function computeNpc(
     say: string | null | undefined,
     graphicId: number,
     graphicHeight: number,
-    graphicDelay: number
+    graphicDelay: number,
+    timerMaskTicks: number
 ): void {
     if (nid === -1 || ntype === -1) {
         return;
@@ -243,6 +244,7 @@ export function computeNpc(
     npc.graphicId = graphicId;
     npc.graphicHeight = graphicHeight;
     npc.graphicDelay = graphicDelay;
+    npc.timerMaskTicks = timerMaskTicks;
 
     NPC_RENDERER.computeInfo(npc);
 }
